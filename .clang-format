@@ -1,0 +1,4 @@
+BreakBeforeBraces: Attach
+AllowShortEnumsOnASingleLine: false
+AllowShortArraysOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None

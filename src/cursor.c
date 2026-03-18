@@ -3,25 +3,39 @@
 
 Cursor cursor = {0, 0};
 
-void cur_clamp() {
+void curClamp() {
+  int bottomclamp = bufferGet()->line_count - 1;
+  if (bottomclamp < 0)
+    bottomclamp = 0;
+
+  if (cursor.y >= bottomclamp)
+    cursor.y = bottomclamp;
+  if (cursor.y < 0)
+    cursor.y = 0;
+
+  int rightclamp = strlen(bufferGet()->lines[cursor.y]) - 1;
+  if (rightclamp < 0)
+    rightclamp = 0;
+
   if (cursor.x < 0)
     cursor.x = 0;
-  if (cursor.y < 0)
-    cursor.y = 0;
-  if (cursor.y >= Buffer_get()->line_count - 1)
-    cursor.y = Buffer_get()->line_count - 1;
-  if (cursor.y < 0)
-    cursor.y = 0;
+  if (cursor.x > rightclamp)
+    cursor.x = rightclamp;
 }
 
-void cur_move_relative(int x, int y) {
+void curInsertMoveRelative(int x, int y) {
   cursor.x += x;
   cursor.y += y;
-  cur_clamp();
 }
 
-void cur_move(int x, int y) {
+void curMoveRelative(int x, int y) {
+  cursor.x += x;
+  cursor.y += y;
+  curClamp();
+}
+
+void curMove(int x, int y) {
   cursor.x = x;
   cursor.y = y;
-  cur_clamp();
+  curClamp();
 }

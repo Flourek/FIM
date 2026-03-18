@@ -1,11 +1,12 @@
 #include "buffer.h"
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
 static Buffer *buffers[1024];
 static int buffer_count = 0;
 
-static char *strdup_safe(const char *s) {
+static char *strdupSafe(const char *s) {
   if (!s)
     return NULL;
   size_t len = strlen(s);
@@ -14,7 +15,7 @@ static char *strdup_safe(const char *s) {
   return out;
 }
 
-Buffer *Buffer_new(void) {
+Buffer *bufferNew(void) {
   Buffer *buf = malloc(sizeof(Buffer));
   buf->lines = NULL;
   buf->line_count = 0;
@@ -24,11 +25,11 @@ Buffer *Buffer_new(void) {
   return buf;
 }
 
-Buffer *Buffer_get() {
+Buffer *bufferGet() {
   return buffers[0];
 }
 
-void Buffer_free(Buffer *buf) {
+void bufferFree(Buffer *buf) {
   if (!buf)
     return;
 
@@ -41,32 +42,54 @@ void Buffer_free(Buffer *buf) {
 }
 
 // --- line ops ---
-void Buffer_insert_line(int index, const char *text) {
-  if (index < 0)
+void bufferInsertLine(int row, const char *text) {
+  if (row < 0)
     return;
 
-  Buffer *buf = Buffer_get();
+  Buffer *buf = bufferGet();
 
-  if (index > buf->line_count) {
-    buf->line_count = index;
+  if (row > buf->line_count) {
+    buf->line_count = row;
   }
 
   buf->lines = realloc(buf->lines, sizeof(char *) * (buf->line_count + 1));
 
   // pushes rest of lines the new line, slow
-  for (int i = buf->line_count; i > index; i--) {
+  for (int i = buf->line_count; i > row; i--) {
     buf->lines[i] = buf->lines[i - 1];
   }
 
-  buf->lines[index] = strdup_safe(text ? text : "");
+  char emptyline[1024] = {0};
+  buf->lines[row] = strdupSafe(emptyline);
   buf->line_count++;
 }
 
-void Buffer_insert_char(int line, int col, char ch) {
+int bufferLineLength(int row) {
+  return strlen(bufferGet()->lines[row]);
+}
 
-  Buffer *buf = Buffer_get();
-  if (line > buf->line_count) {
+bool isValidRow(int row) {
+  Buffer *buf = bufferGet();
+  return row > buf->line_count;
+}
+
+void bufferInsertChar(int row, int col, char ch) {
+  if (!isValidRow)
     return;
-  }
-  buf->lines[line][col] = ch;
+
+  Buffer *buf = bufferGet();
+
+  buf->lines[row][col] = ch;
 };
+
+void bufferDeleteChar(int row, int col) {
+  if (!isValidRow)
+    return;
+
+  Buffer *buf = bufferGet();
+  int prevCharPos = row - 1;
+  if (prevCharPos < 0)
+    prevCharPos = 0;
+
+  buf->lines[row][col] = " ";
+}

@@ -7,14 +7,15 @@ typedef struct {
   int line_count;
 } Buffer;
 
-Buffer *Buffer_new(void);
-void Buffer_free(Buffer *buf);
-Buffer *Buffer_get();
-void Buffer_insert_line(int index, const char *text);
-void Buffer_newline();
-void Buffer_delete_line(Buffer *buf, int index);
+Buffer *bufferNew(void);
+void bufferFree(Buffer *buf);
+Buffer *bufferGet();
+void bufferInsertLine(int line, const char *text);
+void bufferNewline();
+void bufferDeleteLine(Buffer *buf, int index);
+int bufferLineLength(int row);
 
-void Buffer_insert_char(int line, int col, char ch);
-void Buffer_delete_char(Buffer *buf, int line, int col);
+void bufferInsertChar(int row, int col, char ch);
+void bufferDeleteChar(int row, int col);
 
 #endif

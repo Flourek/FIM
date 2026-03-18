@@ -9,8 +9,8 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -I${PROJECT_SOURCE_DIR}/include")
 find_package(Curses REQUIRED)
 include_directories(${CURSES_INCLUDE_DIR})
 
-# Get all .c files in src/
-file(GLOB SOURCES "src/*.c")
+# Get all .c files in src/ and auto-reconfigure when files are added/removed
+file(GLOB SOURCES CONFIGURE_DEPENDS "src/*.c")
 
 # Create executable
 add_executable(app ${SOURCES})

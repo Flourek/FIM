@@ -2,11 +2,12 @@
 #define CURSOR_H
 
 typedef struct {
-    int x, y;
+  int x, y;
 } Cursor;
 extern Cursor cursor;
 
-void cur_move_relative(int x, int y);
-void cur_move(int x, int y);
-void cur_clamp();
+void curMoveRelative(int x, int y);
+void curInsertMoveRelative(int x, int y);
+void curMove(int x, int y);
+void curClamp();
 #endif

@@ -1,6 +1,8 @@
 #include "buffer.h"
+#include "commands.h"
 #include "cursor.h"
-#include "math.h"
+#include "render.h"
+#include <math.h>
 #include <ncurses.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -14,9 +16,10 @@
 #define N_QUIT 'q'
 #define N_ENTER_INSERT 'i'
 #define I_LEAVE_INSERT 27
-#define I_NEWLINE 'K'
-#define I_LINE_START '0'
-#define I_LINE_END '$'
+#define I_BACKSPACE KEY_BACKSPACE
+#define N_NEWLINE 'K'
+#define N_LINE_START '0'
+#define N_LINE_END '$'
 
 typedef enum {
   MODE_NORMAL,
@@ -26,74 +29,74 @@ const char *ModeNames[] = {"Normal", "Insert", "Visual", "Visual_line"};
 
 Mode mode = MODE_NORMAL;
 
-void normalMode(char input) {
+void normalMode(int input) {
 
   switch (input) {
   case N_ENTER_INSERT:
     mode = MODE_INSERT;
+    renderSetCursorStyle(CURSOR_STYLE_BAR);
     break;
-  case I_NEWLINE:
-    N_newline();
+  case N_NEWLINE:
+    nNewline();
     break;
-  case I_LINE_START:
-    cur_move(0, 0);
+  case N_LINE_END:
+    nLineEnd();
+    break;
+  case N_LINE_START:
+    nLineStart();
     break;
   case N_CURSOR_LEFT:
-    cur_move_relative(-1, 0);
+    nCursorLeft();
     break;
   case N_CURSOR_RIGHT:
-    cur_move_relative(1, 0);
+    nCursorRight();
     break;
   case N_CURSOR_UP:
-    cur_move_relative(0, -1);
+    nCursorUp();
     break;
   case N_CURSOR_DOWN:
-    cur_move_relative(0, 1);
+    nCursorDown();
     break;
   }
 }
 
-void insertMode(char input) {
+void insertMode(int input) {
   switch (input) {
   case I_LEAVE_INSERT:
     mode = MODE_NORMAL;
+    renderSetCursorStyle(CURSOR_STYLE_BLOCK);
     return;
+  case I_BACKSPACE:
+    iBackspace();
+    break;
+  default:
+    bufferInsertChar(cursor.y, cursor.x, input);
+    curInsertMoveRelative(1, 0);
+    break;
   }
-
-  Buffer_insert_char(cursor.y, cursor.x, input);
-  cur_move_relative(1, 0);
-}
-
-void render(Buffer *buf, const Cursor cursor) {
-  erase();
-
-  for (int i = 0; i < buf->line_count; i++) {
-    mvprintw(i, 0, "%s", buf->lines[i]);
-  }
-
-  attron(A_BOLD);
-  mvprintw(LINES - 1, 0, "DEBUG: x=%d y=%d mode=%s | LINES: %d", cursor.x,
-           cursor.y, ModeNames[mode], Buffer_get()->line_count);
-  clrtoeol();
-  attroff(A_BOLD);
-
-  move(cursor.y, cursor.x);
-
-  refresh(); // draw to screen
 }
 
 int main() {
-  initscr();            // start ncurses
-  cbreak();             // disable line buffering
-  noecho();             // don't print typed chars
-  keypad(stdscr, TRUE); // enable arrow keys
+  RenderContext render_ctx = {0};
+  if (!renderInit(&render_ctx)) {
+    fprintf(stderr, "failed to initialize renderer\n");
+    return EXIT_FAILURE;
+  }
 
-  Buffer *buf = Buffer_new();
-  Buffer_insert_line(0, "chuj");
-  render(buf, cursor);
+  Buffer *buf = bufferNew();
+  for (size_t i = 0; i < 5; i++) {
+    bufferInsertLine(i, "chuj");
+    /* code */
+  }
+
+  renderDraw(&render_ctx, cursor, ModeNames[mode]);
 
   while (true) {
-    char input = getch();
+    int input = renderGetInput(&render_ctx);
+
+    if (mode == MODE_NORMAL && input == N_QUIT) {
+      break;
+    }
 
     switch (mode) {
     case MODE_INSERT:
@@ -109,9 +112,9 @@ int main() {
       break;
     }
 
-    render(buf, cursor);
+    renderDraw(&render_ctx, cursor, ModeNames[mode]);
   }
 
-  endwin(); // restore terminal
+  renderShutdown(&render_ctx);
   return 0;
 }

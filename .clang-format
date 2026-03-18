@@ -2,3 +2,6 @@ BreakBeforeBraces: Attach
 AllowShortEnumsOnASingleLine: false
 AllowShortArraysOnASingleLine: false
 AllowShortFunctionsOnASingleLine: None
+ColumnLimit: 0
+BinPackArguments: true
+BinPackParameters: true

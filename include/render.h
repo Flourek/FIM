@@ -14,6 +14,7 @@ typedef struct {
 typedef enum {
   CURSOR_STYLE_BLOCK,
   CURSOR_STYLE_BAR,
+  CURSOR_STYLE_UNDERSCORE,
 } CursorStyle;
 
 bool renderInit(RenderContext *ctx);

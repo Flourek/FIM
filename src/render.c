@@ -1,4 +1,5 @@
 #include "render.h"
+#include "state.h"
 #include <ncurses.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,10 +8,9 @@
 
 #define ANSI_CURSOR_BLOCK "\x1b[2 q"
 #define ANSI_CURSOR_BAR "\x1b[6 q"
+#define ANSI_CURSOR_UNDERSCORE "\x1b[4 q"
 
 #define RELATIVE_NUMBERS 1
-
-int last_key = 'E';
 
 static const char *humanKeyName(int key) {
   const char *name = keyname(key);
@@ -21,7 +21,7 @@ static void formatLineNumber(int row, int line_count, char out[]) {
   (void)line_count;
 
   int number = row;
-  int relative = abs(row - cursor.y);
+  int relative = abs(row - cursor.row);
 
   if (RELATIVE_NUMBERS && relative != 0) {
     number = relative;
@@ -81,7 +81,19 @@ void renderShutdown(RenderContext *ctx) {
 }
 
 void renderSetCursorStyle(CursorStyle style) {
-  const char *seq = (style == CURSOR_STYLE_BAR) ? "\x1b[6 q" : "\x1b[2 q";
+  const char *seq;
+  switch (style) {
+  case CURSOR_STYLE_BAR:
+    seq = ANSI_CURSOR_BAR;
+    break;
+  case CURSOR_STYLE_UNDERSCORE:
+    seq = ANSI_CURSOR_UNDERSCORE;
+    break;
+  default:
+    seq = ANSI_CURSOR_BLOCK;
+    break;
+  }
+
   if (isatty(STDOUT_FILENO)) {
     fputs(seq, stdout);
     fflush(stdout);
@@ -97,7 +109,7 @@ void renderDrawStatus(RenderContext *ctx, const char *mode_name) {
 
   int w = getmaxx(status_win);
   char msg[100] = "";
-  snprintf(msg, 100, "%d,%d    ", cursor.x + 1, cursor.y);
+  snprintf(msg, 100, "%d,%d    ", cursor.row + 1, cursor.col);
   int msg_len = (int)strlen(msg);
   int x = w - msg_len;
   if (x < 0)
@@ -108,7 +120,7 @@ void renderDrawStatus(RenderContext *ctx, const char *mode_name) {
   wattroff(status_win, COLOR_PAIR(1));
 
   wattron(status_win, A_BOLD);
-  mvwprintw(status_win, 1, 0, "DEBUG: mode=%s | LINES: %d | KEY: %s %d", mode_name, buf->line_count, humanKeyName(last_key), last_key);
+  mvwprintw(status_win, 1, 0, "DEBUG: mode=%s | LINES: %d | KEY: %s %d | MSG: %s", mode_name, buf->line_count, humanKeyName(state.last_key), state.last_key, state.log_message);
   wclrtoeol(status_win);
   wattroff(status_win, A_BOLD);
 
@@ -123,10 +135,11 @@ void renderDrawBuffer(RenderContext *ctx) {
   Buffer *buf = bufferGet();
 
   for (int i = 0; i < buf->line_count; i++) {
-    mvwprintw(main_win, i, 0, "%s", buf->lines[i]);
+    const char *line = bufferGetLine((Pos){i, 0});
+    mvwprintw(main_win, i, 0, "%s", line ? line : "");
   }
 
-  wmove(main_win, cursor.y, cursor.x);
+  wmove(main_win, cursor.row, cursor.col);
   wrefresh(main_win);
 }
 
@@ -146,7 +159,7 @@ void renderDrawNumbers(RenderContext *ctx) {
       int number_len = (int)strlen(number_str);
       int w = getmaxx(number_win);
 
-      if (i == cursor.y) {
+      if (i == cursor.row) {
         mvwprintw(number_win, i, 0, number_str);
       } else {
         mvwprintw(number_win, i, w - number_len - 1, number_str);
@@ -167,6 +180,6 @@ void renderDraw(RenderContext *ctx, Cursor cursor, const char *mode_name) {
 
 int renderGetInput(RenderContext *ctx) {
   WINDOW *main_win = (WINDOW *)ctx->main_window;
-  last_key = wgetch(main_win);
-  return last_key;
+  state.last_key = wgetch(main_win);
+  return state.last_key;
 }

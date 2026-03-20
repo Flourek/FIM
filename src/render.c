@@ -35,6 +35,7 @@ bool renderInit(RenderContext *ctx) {
   cbreak();
   noecho();
 
+  state.ctx = ctx;
   // in Render_init(), once (not in draw)
   start_color();
   use_default_colors();                   // allow -1 = terminal default background
@@ -109,7 +110,7 @@ void renderDrawStatus(RenderContext *ctx, const char *mode_name) {
 
   int w = getmaxx(status_win);
   char msg[100] = "";
-  snprintf(msg, 100, "%d,%d    ", cursor.row + 1, cursor.col);
+  snprintf(msg, 100, "%d,%d    ", cursor.row + 1, cursor.col + 1);
   int msg_len = (int)strlen(msg);
   int x = w - msg_len;
   if (x < 0)

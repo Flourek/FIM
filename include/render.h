@@ -1,7 +1,6 @@
 #ifndef RENDER_H
 #define RENDER_H
 
-#include "buffer.h"
 #include "cursor.h"
 #include <stdbool.h>
 

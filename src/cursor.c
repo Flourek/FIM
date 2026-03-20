@@ -1,6 +1,7 @@
 #include "cursor.h"
 #include "buffer.h"
 #include "helpers.h"
+#include "motion.h"
 #include "state.h"
 #include <string.h>
 
@@ -35,42 +36,28 @@ void curMoveRelative(int x, int y) {
   curClamp();
 }
 
-void curMove(int x, int y) {
-  cursor.col = x;
-  cursor.row = y;
+void curMove(Pos pos) {
+  cursor.col = pos.col;
+  cursor.row = pos.row;
   curClamp();
 }
 
-void curWordNext() {
-  Pos pos = bufferTraverseFrom(cursor, bufferIsCharBlank, false);
-  pos = bufferTraverseFrom(pos, bufferIsCharGraph, false);
-  curMove(pos.col, pos.row);
+void curNextWordStart() {
+  Range range = motionWordNextStart(cursor);
+  curMove(range.end);
 }
 
-void curWordPrev() {
-  Pos prevPos = {cursor.row, cursor.col - 1};
-  Pos pos = cursor;
+void curWordStart() {
+  Range range = motionWordStart(cursor);
+  curMove(range.end);
+}
 
-  if (bufferIsCharBlank(prevPos)) {
-    pos = bufferTraverseFrom(pos, bufferIsCharBlank, true);
-    pos = bufferTraverseFrom(pos, bufferIsCharGraph, true);
-  }
-
-  // if (cursorAtBegin) curWordNext();
-  pos = bufferTraverseFrom(pos, bufferIsCharBlank, true);
-  pos = bufferTraverseFrom(pos, bufferIsCharGraph, false);
-
-  curMove(pos.col, pos.row);
+void curPrevWordEnd() {
+  Range range = motionPrevWordEnd(cursor);
+  curMove(range.end);
 }
 
 void curWordEnd() {
-  Pos nextPos = {cursor.row, cursor.col + 1};
-
-  if (bufferIsCharBlank(nextPos))
-    curWordNext();
-
-  Pos blankPos = bufferTraverseFrom(cursor, bufferIsCharBlank, false);
-
-  curMove(blankPos.col - 1, blankPos.row);
-  log("%i %i", cursorAtEnd, blankPos.col);
+  Range range = motionWordEnd(cursor);
+  curMove(range.end);
 }

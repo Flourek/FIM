@@ -18,9 +18,10 @@ int main() {
   Buffer *buf = bufferNew();
   bufferInsertLine(0, "loremipsumdolorsit amet");
   bufferInsertLine(1, "    consectetur adipiscing elit");
-  bufferInsertLine(2, "sed do eiusmod tempor incididunt");
-  bufferInsertLine(3, "ut labore et dolore magna aliqua");
-  bufferInsertLine(4, "ut enim ad minim veniam");
+  bufferInsertLine(2, "");
+  bufferInsertLine(3, "");
+  bufferInsertLine(4, "t");
+  bufferInsertLine(5, "ut enim ad minim veniam");
 
   renderDraw(&render_ctx, cursor, ModeNames[state.mode]);
 

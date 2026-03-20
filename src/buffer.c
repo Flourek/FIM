@@ -199,48 +199,72 @@ void bufferInsertChar(Pos pos, char ch) {
   line[pos.col] = ch;
 }
 
-void bufferDeleteChar(Pos pos) {
+bool bufferDeleteChar(Pos pos) {
   if (!isValidPos(pos))
-    return;
+    return true;
 
   char *line = bufferGetLine(pos);
   if (!line)
-    return;
+    return true;
 
   size_t len = strlen(line);
 
   if ((size_t)pos.col >= len)
-    return;
+    return true;
 
   memmove(line + pos.col, line + pos.col + 1, len - (size_t)pos.col);
+  return false;
 }
 
-Pos bufferTraverseFrom(Pos start, TraverseFn fn, bool reverse) {
+bool bufferDeleteRange(Range range) {
+  Pos start = range.start;
+  Pos end = range.end;
+
+  char *line = bufferGetLine(start);
+  if (!line)
+    return true;
+
+  size_t len = strlen(line);
+  if (start.col < 0 || (size_t)start.col >= len)
+    return true;
+
+  if (end.col < start.col)
+    end.col = start.col;
+  if ((size_t)end.col >= len)
+    end.col = (int)len - 1;
+
+  memmove(line + start.col, line + end.col + 1, len - (size_t)end.col);
+  return false;
+}
+
+Pos bufferStart(void) {
+  return (Pos){0, -1};
+}
+
+Pos bufferEnd(void) {
   Buffer *buf = bufferGet();
-  int xStart = start.col;
+  if (!buf || buf->line_count <= 0)
+    return bufferStart();
 
-  if (reverse) {
+  int row = buf->line_count - 1;
+  return (Pos){row, bufferLineLength(row)};
+}
 
-    for (int y = start.row; y >= 0; y--) {
+Pos bufferTraverse(Pos start, Pos end, TraverseFn fn) {
+  bool forward = start.row < end.row || (start.row == end.row && start.col <= end.col);
+
+  if (forward) {
+    int xStart = start.col;
+
+    for (int y = start.row; y <= end.row; y++) {
       char *line = bufferGetLine((Pos){y, 0});
+      int xEnd = (y == end.row) ? end.col : (int)strlen(line);
 
-      for (int x = xStart; x >= 0; x--) {
+      // if on the end row, iterate untill the final column, else full line
+      for (int x = xStart; x <= xEnd; x++) {
         Pos pos = {y, x};
-        bool result = fn(pos);
-        if (result)
-          return pos;
-      }
+        char c = bufferGetChar(pos);
 
-      xStart = strlen(line) - 1;
-    }
-
-  } else {
-
-    for (int y = start.row; y < buf->line_count; y++) {
-      char *line = bufferGetLine((Pos){y, 0});
-
-      for (int x = xStart; x < (int)strlen(line) + 1; x++) {
-        Pos pos = {y, x};
         bool result = fn(pos);
         if (result)
           return pos;
@@ -248,26 +272,37 @@ Pos bufferTraverseFrom(Pos start, TraverseFn fn, bool reverse) {
 
       xStart = 0;
     }
-    // log("chuj");
+  } else {
+    int xStart = start.col;
+
+    for (int y = start.row; y >= end.row; y--) {
+      if (y != start.row)
+        xStart = bufferLineLength(y);
+      int xEnd = (y == end.row) ? end.col : 0;
+
+      for (int x = xStart; x >= xEnd; x--) {
+        Pos pos = {y, x};
+
+        bool result = fn(pos);
+        if (result)
+          return pos;
+      }
+    }
   }
 
   return start;
 }
 
 bool bufferIsCharGraph(Pos pos) {
-  char *line = bufferGetLine(pos);
-
-  if (!line)
-    return false;
-
-  return isgraph((unsigned char)line[pos.col]);
+  char c = bufferGetChar(pos);
+  return isgraph((unsigned char)c);
 }
 
 bool bufferIsCharBlank(Pos pos) {
   char c = bufferGetChar(pos);
 
   // file begin and end of lines
-  if (c == '\0' || (pos.col == 0 && pos.row == 0))
+  if (c == '\0')
     return true;
 
   return isspace((unsigned char)c);
@@ -275,8 +310,8 @@ bool bufferIsCharBlank(Pos pos) {
 
 // WORD surrounded by newspace
 Word bufferGetNextWord(Pos pos) {
-  Pos blankPos = bufferTraverseFrom(pos, bufferIsCharBlank, false);
-  Pos newPos = bufferTraverseFrom(blankPos, bufferIsCharGraph, false);
+  Pos blankPos = bufferTraverse(pos, bufferEnd(), bufferIsCharBlank);
+  Pos newPos = bufferTraverse(blankPos, bufferEnd(), bufferIsCharGraph);
 
   // memccpy
   Word w = {0};

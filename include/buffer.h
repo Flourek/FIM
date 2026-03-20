@@ -8,6 +8,12 @@ typedef struct {
 } Pos;
 
 typedef struct {
+  Pos start;
+  Pos end;
+  bool inclusive;
+} Range;
+
+typedef struct {
   int index;
   char **lines;
   int line_count;
@@ -31,16 +37,19 @@ void bufferInsertLine(int row, const char *text);
 void bufferDeleteLine(int row);
 
 int bufferLineLength(int row);
+Pos bufferStart(void);
+Pos bufferEnd(void);
 
 void bufferNewLine(Pos pos);
 void bufferRemoveNewline(Pos pos);
 void bufferMergeLine(int destRow, int srcRow, int colBreakpoint);
 void bufferInsertChar(Pos pos, char ch);
-void bufferDeleteChar(Pos pos);
+bool bufferDeleteChar(Pos pos);
+bool bufferDeleteRange(Range range);
 void bufferReplaceChar(Pos pos, const char ch);
 bool bufferIsCharBlank(Pos pos);
 Word bufferGetNextWord(Pos pos);
-Pos bufferTraverseFrom(Pos start, TraverseFn fn, bool reverse);
+Pos bufferTraverse(Pos start, Pos end, TraverseFn fn);
 bool bufferIsCharGraph(Pos pos);
 bool bufferIsCharBlank(Pos pos);
 #endif

@@ -9,9 +9,11 @@ extern Cursor cursor;
 
 void curMoveRelative(int x, int y);
 void curInsertMoveRelative(int x, int y);
-void curMove(int x, int y);
-void curInsertMove(int x, int y);
+void curMove(Pos pos);
+void curInsertMove(Pos pos);
 void curClamp();
-void curWordNextStart();
-void curWordPrev();
+void curNextWordStart();
+void curWordEnd();
+void curWordStart();
+void curPrevWordEnd();
 #endif

@@ -1,6 +1,9 @@
 #include "buffer.h"
 #include "cursor.h"
 #include "helpers.h"
+#include "motion.h"
+#include "render.h"
+#include "state.h"
 #include <ncurses.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -9,19 +12,30 @@
 void niNewline() {
   bufferNewLine(cursor);
   curMoveRelative(0, 1);
-  curMove(0, cursor.row);
+  curMove((Pos){cursor.row, 0});
 }
 
 void nReplace(char ch) {
   bufferReplaceChar(cursor, ch);
 }
 
+void nSubstitute() {
+  nDeleteChar();
+  nInsert();
+}
+
+void nDeleteChar() {
+  bufferDeleteChar(cursor);
+}
+
 void niLineEnd() {
-  curMove(bufferLineLength(cursor.row), cursor.row);
+  Range range = motionLineEnd(cursor);
+  curMove(range.end);
 }
 
 void niLineStart() {
-  curMove(0, cursor.row);
+  Range range = motionLineStart(cursor);
+  curMove(range.end);
 }
 
 void niCursorLeft() {
@@ -45,27 +59,53 @@ void nQuit() {
   exit(EXIT_SUCCESS);
 }
 
+void nAppend() {
+  nInsert();
+  niCursorRight();
+}
+
+void nInsert() {
+  state.mode = MODE_INSERT;
+  renderSetCursorStyle(CURSOR_STYLE_BAR);
+}
+
+void iLeaveInsert() {
+  state.mode = MODE_NORMAL;
+  renderSetCursorStyle(CURSOR_STYLE_BLOCK);
+  niCursorLeft();
+}
+
 void iInsertCharacter(char input) {
   bufferInsertChar(cursor, input);
   curMoveRelative(1, 0);
 }
 
 void nFirstGraph() {
-  Pos pos = bufferTraverseFrom(cursor, bufferIsCharGraph, false);
+  Pos pos = bufferTraverse(cursor, bufferEnd(), bufferIsCharGraph);
   log("%s", "first non whitespace");
-  curMove(pos.col, pos.row);
+  curMove(pos);
 }
 
 void nWordPrev() {
-  curWordPrev();
+  Pos prevPos = {cursor.row, cursor.col - 1};
+
+  if (bufferIsCharBlank(prevPos))
+    curPrevWordEnd();
+
+  curWordStart();
 }
 
 void nWordEnd() {
+  Pos nextPos = {cursor.row, cursor.col + 1};
+
+  if (bufferIsCharBlank(nextPos))
+    curNextWordStart();
+
   curWordEnd();
 }
 
 void nWordNext() {
-  curWordNextStart();
+  curNextWordStart();
 }
 
 void nMergeLine() {
@@ -80,7 +120,7 @@ void iBackspace() {
     curMoveRelative(0, -1);
     int len = bufferLineLength(cursor.row);
     bufferMergeLine(cursor.row, cursor.row + 1, cursor.col);
-    curMove(len, cursor.row);
+    curMove((Pos){cursor.row, len});
     return;
   }
   curMoveRelative(-1, 0);

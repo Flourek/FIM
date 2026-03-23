@@ -46,6 +46,7 @@ void bufferMergeLine(int destRow, int srcRow, int colBreakpoint);
 void bufferInsertChar(Pos pos, char ch);
 bool bufferDeleteChar(Pos pos);
 bool bufferDeleteRange(Range range);
+Range bufferNormalizeRange(Range range);
 void bufferReplaceChar(Pos pos, const char ch);
 bool bufferIsCharBlank(Pos pos);
 Word bufferGetNextWord(Pos pos);

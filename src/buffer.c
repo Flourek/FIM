@@ -22,6 +22,12 @@ static bool isValidPos(Pos pos) {
   return true;
 }
 
+static int comparePos(Pos a, Pos b) {
+  if (a.row != b.row)
+    return a.row - b.row;
+  return a.col - b.col;
+}
+
 Buffer *bufferNew(void) {
   Buffer *buf = malloc(sizeof(Buffer));
   buf->lines = NULL;
@@ -217,24 +223,82 @@ bool bufferDeleteChar(Pos pos) {
 }
 
 bool bufferDeleteRange(Range range) {
+  Buffer *buf = bufferGet();
+  if (!buf || buf->line_count <= 0)
+    return true;
+
+  range = bufferNormalizeRange(range);
   Pos start = range.start;
   Pos end = range.end;
 
-  char *line = bufferGetLine(start);
-  if (!line)
+  if (start.row < 0 || start.row >= buf->line_count)
+    return true;
+  if (end.row < 0 || end.row >= buf->line_count)
     return true;
 
-  size_t len = strlen(line);
-  if (start.col < 0 || (size_t)start.col >= len)
+  char *startLine = bufferGetLine(start);
+  char *endLine = bufferGetLine(end);
+  if (!startLine || !endLine)
     return true;
 
-  if (end.col < start.col)
-    end.col = start.col;
-  if ((size_t)end.col >= len)
-    end.col = (int)len - 1;
+  size_t startLen = strlen(startLine);
+  size_t endLen = strlen(endLine);
 
-  memmove(line + start.col, line + end.col + 1, len - (size_t)end.col);
+  // Clamp both columns to valid ranges on their current lines.
+  if (start.col < 0)
+    start.col = 0;
+  if ((size_t)start.col > startLen)
+    start.col = (int)startLen;
+
+  if (end.col < 0)
+    end.col = -1;
+  if ((size_t)end.col > endLen)
+    end.col = (int)endLen;
+
+  // Single-line delete: remove [start.col, end.col] in place.
+  if (start.row == end.row) {
+    if (startLen == 0 || (size_t)start.col >= startLen)
+      return false;
+
+    if (end.col < start.col)
+      end.col = start.col;
+    if ((size_t)end.col >= startLen)
+      end.col = (int)startLen - 1;
+
+    memmove(startLine + start.col, startLine + end.col + 1, startLen - (size_t)end.col);
+    return false;
+  }
+
+  // Multi-line delete:
+  // keep front of start line + keep tail of end line, then delete lines in between.
+  size_t keepFrontLen = (size_t)start.col;
+  size_t keepTailFrom = (size_t)(end.col + 1);
+  if (keepTailFrom > endLen)
+    keepTailFrom = endLen;
+  size_t keepTailLen = endLen - keepTailFrom;
+
+  size_t maxTailLen = (LINE_CAPACITY - 1) - keepFrontLen;
+  if (keepTailLen > maxTailLen)
+    keepTailLen = maxTailLen;
+
+  memmove(startLine + keepFrontLen, endLine + keepTailFrom, keepTailLen);
+  startLine[keepFrontLen + keepTailLen] = '\0';
+
+  int linesToDelete = end.row - start.row;
+  for (int i = 0; i < linesToDelete; i++)
+    bufferDeleteLine(start.row + 1);
+
   return false;
+}
+
+Range bufferNormalizeRange(Range range) {
+  if (comparePos(range.start, range.end) > 0) {
+    Pos tmp = range.start;
+    range.start = range.end;
+    range.end = tmp;
+  }
+
+  return range;
 }
 
 Pos bufferStart(void) {

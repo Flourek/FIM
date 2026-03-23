@@ -1,5 +1,6 @@
 #include "input.h"
 #include "commands.h"
+#include "files.h"
 #include "helpers.h"
 #include "motion.h"
 #include "render.h"
@@ -35,6 +36,7 @@
 #define N_DELETE_CHAR 'x'
 #define N_DELETE 'd'
 #define N_SUBSTITUTE 's'
+#define N_SAVE 19
 
 int waitForInput() {
   renderSetCursorStyle(CURSOR_STYLE_UNDERSCORE);
@@ -78,19 +80,17 @@ Range handleMotion(int input, Pos cur) {
     out = motionWordNextStart(cur);
     break;
   default:
-    break;
+    return (Range){cur, cur};
   }
 
   return out;
 }
 
 bool nDelete(Range range) {
-  if (range.start.row != range.end.row) {
-    log("%s ", "chuj");
-    return true;
-  }
 
+  range = bufferNormalizeRange(range);
   bufferDeleteRange(range);
+  curMove(range.start);
   return false;
 }
 
@@ -100,20 +100,20 @@ void waitForMotion() {
     return;
 
   Range range = handleMotion(input, cursor);
-
-  if (range.start.col > range.end.col) {
-    Pos tmp = range.start;
-    range.start = range.end;
-    range.end = tmp;
-  }
+  log("Range: <%i,%i> - <%i,%i>", range.start.row, range.start.col, range.end.row, range.end.col);
 
   Range truncated = range;
   if (!range.inclusive) {
     truncated.end.col--;
   }
 
+  if (range.start.row != range.end.row) {
+    // return;
+    // range.end.row = range.start.row;
+    // range.end.col = bufferLineLength(range.start.row);
+  }
+
   nDelete(truncated);
-  curMove(range.start);
 }
 
 static void normalMode(int input) {
@@ -133,6 +133,9 @@ static void normalMode(int input) {
   case N_NEWLINE:
     niNewline();
     break;
+  case N_SAVE:
+    filesSaveFromBuffer("./chuj", bufferGet());
+    break;
   case N_SUBSTITUTE:
     nSubstitute();
     break;
@@ -143,8 +146,8 @@ static void normalMode(int input) {
     nReplace((char)waitForInput());
     break;
   case N_CHUJ:
-    int macro[5] = {'i', KEY_END, 'h', 'u', 'j'};
-    inputHandleMacro(macro, 5);
+    int macro[7] = {'i', KEY_END, ' ', 'c', 'h', 'u', 'j'};
+    inputHandleMacro(macro, 7);
     break;
   default:
     Range range = handleMotion(input, cursor);
@@ -200,8 +203,6 @@ bool inputHandle(int input) {
   if (state.mode == MODE_NORMAL && input == N_QUIT) {
     return true;
   }
-
-  log("");
 
   switch (state.mode) {
   case MODE_INSERT:

@@ -20,6 +20,7 @@ CTestTestfile.cmake
 *.exe
 *.out
 app
+TODO
 
 # Editors
 .vscode/*

@@ -8,6 +8,8 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include "utf8.h"
+#include <wchar.h>
 #define ANSI_CURSOR_BLOCK "\x1b[2 q"
 #define ANSI_CURSOR_BAR "\x1b[6 q"
 #define ANSI_CURSOR_UNDERSCORE "\x1b[4 q"
@@ -130,6 +132,7 @@ void renderDrawStatus(RenderContext *ctx, const char *mode_name) {
   wattroff(status_win, COLOR_PAIR(1));
 
   wattron(status_win, A_BOLD);
+
   mvwprintw(status_win, 1, 0, "DEBUG: mode=%s | LINES: %d | KEY: %s %d | MSG: %s", mode_name, buf->line_count, humanKeyName(state.last_key), state.last_key, state.log_message);
   wclrtoeol(status_win);
   wattroff(status_win, A_BOLD);
@@ -152,7 +155,7 @@ Pos renderViewportOffset(RenderContext *ctx) {
   // viewportStart.row +
   out.row = cursor.row % h;
 
-  log("height: %i cursor: %i out: %i viewport: %i", h, cursor.row, out.row, viewportStart.row);
+  // log("height: %i cursor: %i out: %i viewport: %i", h, cursor.row, out.row, viewportStart.row);
   return out;
 }
 
@@ -171,13 +174,17 @@ void renderDrawBuffer(RenderContext *ctx) {
 
   int numbersWidth = 4;
   int viewportWidth = (w - 1) - numbersWidth;
-  if (cursor.col > viewportStart.col + viewportWidth) {
-    viewportStart.col = cursor.col - viewportWidth;
+
+  // Convert cursor to visual columns for viewport calculation
+  char *cursorLine = bufferGetLine(cursor.row);
+  int cursorVisual = utf8_byte_to_column(cursorLine, cursor.col);
+
+  if (cursorVisual > viewportStart.col + viewportWidth) {
+    viewportStart.col = cursorVisual - viewportWidth;
   }
 
-  log("L: %i c: %i  v: %i", viewportWidth, cursor.col, viewportStart.col);
-  if (cursor.col < viewportStart.col) {
-    viewportStart.col = cursor.col;
+  if (cursorVisual < viewportStart.col) {
+    viewportStart.col = cursorVisual;
   }
 
   if (cursor.row > viewportStart.row + (h - 1)) {
@@ -215,9 +222,12 @@ void renderDrawBuffer(RenderContext *ctx) {
       wattroff(main_win, COLOR_PAIR(3));
 
       // PRINTING LINE CONTENT
-      const char *line = bufferGetLine((Pos){line_index, 0});
-      mvwaddnstr(main_win, i, numbersWidth, line + viewportStart.col, w - numbersWidth);
-
+      const char *line = bufferGetLine(line_index);
+      if (line) {
+        int byteOffset = utf8_column_to_byte(line, viewportStart.col);
+        wmove(main_win, i, numbersWidth);
+        waddnstr(main_win, line + byteOffset, viewportWidth + 1);
+      }
     } else {
       // UNUSED LINE
       wattron(main_win, COLOR_PAIR(3));
@@ -227,13 +237,14 @@ void renderDrawBuffer(RenderContext *ctx) {
   }
 
   wrefresh(main_win);
-  renderSetCursor(ctx, numbersWidth);
+  renderSetCursor(main_win, numbersWidth);
 }
 
-void renderSetCursor(RenderContext *ctx, int numbersWidth) {
-  WINDOW *main_win = (WINDOW *)ctx->main_window;
-  // int h = getmaxy(main_win);
-  wmove(main_win, cursor.row - viewportStart.row, numbersWidth + cursor.col - viewportStart.col);
+void renderSetCursor(WINDOW *win, int numbersWidth) {
+  char *test = bufferGetLine(cursor.row);
+  int idx = utf8_column_to_byte(test, cursor.col);
+  log("%i c: ", utf8_next(test, idx));
+  wmove(win, cursor.row - viewportStart.row, numbersWidth + cursor.col - viewportStart.col);
 }
 
 void renderDraw(RenderContext *ctx, Cursor cursor, const char *mode_name) {
@@ -241,8 +252,12 @@ void renderDraw(RenderContext *ctx, Cursor cursor, const char *mode_name) {
   renderDrawStatus(ctx, mode_name);
 }
 
-int renderGetInput(RenderContext *ctx) {
+int renderGetInput(RenderContext *ctx, wint_t *ch) {
   WINDOW *main_win = (WINDOW *)ctx->main_window;
-  state.last_key = wgetch(main_win);
-  return state.last_key;
+  int ret = wget_wch(main_win, ch);
+  state.last_key = (int)*ch;
+
+  // log("keyType=%d ch_dec=%d ch_hex=%04X", ret, (int)*ch, (int)*ch);
+
+  return ret;
 }

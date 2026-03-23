@@ -1,5 +1,6 @@
 #include "buffer.h"
 #include "helpers.h"
+#include "utf8.h"
 #include <ctype.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -42,23 +43,23 @@ Buffer *bufferGet() {
   return buffers[0];
 }
 
-char *bufferGetLine(Pos pos) {
+char *bufferGetLine(int row) {
   Buffer *buf = bufferGet();
 
   if (!buf)
     return NULL;
 
-  if (pos.row < 0 || pos.row >= buf->line_count)
+  if (row < 0 || row >= buf->line_count)
     return NULL;
 
-  return buf->lines[pos.row];
+  return buf->lines[row];
 }
 
 char bufferGetChar(Pos pos) {
   if (!isValidPos(pos))
     return '\0';
 
-  char *line = bufferGetLine(pos);
+  char *line = bufferGetLine(pos.row);
   if (!line)
     return '\0';
 
@@ -77,28 +78,15 @@ void bufferFree(Buffer *buf) {
   buffer_count--;
 }
 
-void bufferReplaceChar(Pos pos, const char ch) {
+void bufferReplaceChar(Pos pos, const int ch) {
   if (!isValidPos(pos))
     return;
 
-  char *line = bufferGetLine(pos);
+  char *line = bufferGetLine(pos.row);
   if (!line)
     return;
 
   line[pos.col] = ch;
-}
-
-void bufferRemoveNewline(Pos pos) {
-  if (!isValidPos(pos))
-    return;
-
-  char *line_above = bufferGetLine((Pos){pos.row - 1, 0});
-  char *line = bufferGetLine(pos);
-  if (!line_above || !line)
-    return;
-
-  memcpy(line + strlen(line), line_above, strlen(line_above));
-  bufferDeleteLine(pos.row + 1);
 }
 
 void bufferMergeLine(int destRow, int srcRow, int colBreakpoint) {
@@ -108,8 +96,8 @@ void bufferMergeLine(int destRow, int srcRow, int colBreakpoint) {
   if (!isValidPos((Pos){destRow, colBreakpoint}))
     return;
 
-  char *src = bufferGetLine((Pos){srcRow, 0});
-  char *dest = bufferGetLine((Pos){destRow, 0});
+  char *src = bufferGetLine(srcRow);
+  char *dest = bufferGetLine(destRow);
   if (!src || !dest)
     return;
 
@@ -121,12 +109,13 @@ void bufferNewLine(Pos pos) {
   if (!isValidPos(pos))
     return;
 
-  char *line = bufferGetLine(pos);
+  char *line = bufferGetLine(pos.row);
   if (!line)
     return;
 
-  bufferInsertLine(pos.row + 1, line + pos.col);
-  line[pos.col] = '\0';
+  int byteCol = utf8_column_to_byte(line, pos.col);
+  bufferInsertLine(pos.row + 1, line + byteCol);
+  line[byteCol] = '\0';
 }
 
 // --- line ops ---
@@ -181,15 +170,15 @@ void bufferDeleteLine(int index) {
 }
 
 int bufferLineLength(int row) {
-  char *line = bufferGetLine((Pos){row, 0});
+  char *line = bufferGetLine(row);
   return line ? (int)strlen(line) : 0;
 }
 
-void bufferInsertChar(Pos pos, char ch) {
+void bufferInsertChar(Pos pos, wint_t ch) {
   if (!isValidPos(pos))
     return;
 
-  char *line = bufferGetLine(pos);
+  char *line = bufferGetLine(pos.row);
   if (!line)
     return;
 
@@ -201,24 +190,29 @@ void bufferInsertChar(Pos pos, char ch) {
   if (len >= LINE_CAPACITY - 1)
     return;
 
-  memmove(line + pos.col + 1, line + pos.col, len - (size_t)pos.col + 1);
-  line[pos.col] = ch;
+  char buf[8];
+  size_t charLen = utf8_encode(buf, ch);
+  size_t byteCol = (size_t)utf8_column_to_byte(line, pos.col);
+
+  memmove(line + byteCol + charLen, line + byteCol, len - (size_t)byteCol + charLen);
+  memcpy(line + byteCol, buf, charLen);
 }
 
 bool bufferDeleteChar(Pos pos) {
   if (!isValidPos(pos))
     return true;
 
-  char *line = bufferGetLine(pos);
-  if (!line)
-    return true;
-
+  char *line = bufferGetLine(pos.row);
   size_t len = strlen(line);
 
   if ((size_t)pos.col >= len)
     return true;
 
-  memmove(line + pos.col, line + pos.col + 1, len - (size_t)pos.col);
+  size_t byteCol = (size_t)utf8_column_to_byte(line, pos.col);
+  size_t charLen = utf8_char_len(line, byteCol);
+  size_t n = len - (size_t)byteCol - charLen + 1;
+
+  memmove(line + byteCol, line + byteCol + charLen, n);
   return false;
 }
 
@@ -236,8 +230,8 @@ bool bufferDeleteRange(Range range) {
   if (end.row < 0 || end.row >= buf->line_count)
     return true;
 
-  char *startLine = bufferGetLine(start);
-  char *endLine = bufferGetLine(end);
+  char *startLine = bufferGetLine(start.row);
+  char *endLine = bufferGetLine(end.row);
   if (!startLine || !endLine)
     return true;
 
@@ -321,13 +315,12 @@ Pos bufferTraverse(Pos start, Pos end, TraverseFn fn) {
     int xStart = start.col;
 
     for (int y = start.row; y <= end.row; y++) {
-      char *line = bufferGetLine((Pos){y, 0});
+      char *line = bufferGetLine(y);
       int xEnd = (y == end.row) ? end.col : (int)strlen(line);
 
       // if on the end row, iterate untill the final column, else full line
       for (int x = xStart; x <= xEnd; x++) {
         Pos pos = {y, x};
-        char c = bufferGetChar(pos);
 
         bool result = fn(pos);
         if (result)
@@ -342,6 +335,7 @@ Pos bufferTraverse(Pos start, Pos end, TraverseFn fn) {
     for (int y = start.row; y >= end.row; y--) {
       if (y != start.row)
         xStart = bufferLineLength(y);
+
       int xEnd = (y == end.row) ? end.col : 0;
 
       for (int x = xStart; x >= xEnd; x--) {
@@ -370,14 +364,4 @@ bool bufferIsCharBlank(Pos pos) {
     return true;
 
   return isspace((unsigned char)c);
-}
-
-// WORD surrounded by newspace
-Word bufferGetNextWord(Pos pos) {
-  Pos blankPos = bufferTraverse(pos, bufferEnd(), bufferIsCharBlank);
-  Pos newPos = bufferTraverse(blankPos, bufferEnd(), bufferIsCharGraph);
-
-  // memccpy
-  Word w = {0};
-  return w;
 }

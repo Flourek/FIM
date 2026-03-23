@@ -6,6 +6,7 @@
 #include "render.h"
 #include "state.h"
 #include <ncurses.h>
+#include <wchar.h>
 
 #define N_CURSOR_RIGHT 'l'
 #define N_CURSOR_LEFT 'h'
@@ -37,12 +38,23 @@
 #define N_DELETE 'd'
 #define N_SUBSTITUTE 's'
 #define N_SAVE 19
+#define N_LOAD 23
+#define N_FILE_END 'G'
+#define N_G_KEY 'g'
+#define N_G_FILE_START 'g'
 
-int waitForInput() {
+#include "utf8.h"
+
+// keyType is the return of wget_wch (OK or KEY_CODE_YES), ch is the character/key.
+static void waitForInput(int *keyTypeOut, wint_t *chOut) {
   renderSetCursorStyle(CURSOR_STYLE_UNDERSCORE);
-  int out = renderGetInput(state.ctx);
+  wint_t ch;
+  int keyType = renderGetInput(state.ctx, &ch);
   renderSetCursorStyle(CURSOR_STYLE_BLOCK);
-  return out;
+  if (keyTypeOut)
+    *keyTypeOut = keyType;
+  if (chOut)
+    *chOut = ch;
 }
 
 Range handleMotion(int input, Pos cur) {
@@ -66,6 +78,12 @@ Range handleMotion(int input, Pos cur) {
     break;
   case N_CURSOR_DOWN:
     out = motionDown(cur);
+    break;
+  case N_G_KEY:
+    out = motionFileStart(cur);
+    break;
+  case N_FILE_END:
+    out = motionFileEnd(cur);
     break;
   case N_FIRST_GRAPH:
     out = motionFirstGraph(cur);
@@ -95,12 +113,16 @@ bool nDelete(Range range) {
 }
 
 void waitForMotion() {
-  int input = waitForInput();
+  int keyType;
+  wint_t ch;
+  waitForInput(&keyType, &ch);
+
+  int input = (int)ch;
   if (input == I_LEAVE_INSERT)
     return;
 
   Range range = handleMotion(input, cursor);
-  log("Range: <%i,%i> - <%i,%i>", range.start.row, range.start.col, range.end.row, range.end.col);
+  // log("Range: <%i,%i> - <%i,%i>", range.start.row, range.start.col, range.end.row, range.end.col);
 
   Range truncated = range;
   if (!range.inclusive) {
@@ -116,7 +138,7 @@ void waitForMotion() {
   nDelete(truncated);
 }
 
-static void normalMode(int input) {
+static void normalMode(int keyType, int input) {
   switch (input) {
   case N_INSERT:
     nInsert();
@@ -133,6 +155,9 @@ static void normalMode(int input) {
   case N_NEWLINE:
     niNewline();
     break;
+  case N_LOAD:
+    filesLoadIntoBuffer("./chuj", bufferGet());
+    break;
   case N_SAVE:
     filesSaveFromBuffer("./chuj", bufferGet());
     break;
@@ -142,9 +167,13 @@ static void normalMode(int input) {
   case N_DELETE_CHAR:
     nDeleteChar();
     break;
-  case N_REPLACE:
-    nReplace((char)waitForInput());
-    break;
+  case N_REPLACE: {
+    int kt;
+    wint_t ch;
+    waitForInput(&kt, &ch);
+    // Use the real Unicode codepoint for replace
+    nReplace(ch);
+  } break;
   case N_CHUJ:
     int macro[7] = {'i', KEY_END, ' ', 'c', 'h', 'u', 'j'};
     inputHandleMacro(macro, 7);
@@ -156,60 +185,79 @@ static void normalMode(int input) {
   }
 }
 
-static void insertMode(int input) {
-  switch (input) {
-  case I_LEAVE_INSERT:
-    iLeaveInsert();
-    break;
-  case I_LINE_END:
-    niLineEnd();
-    break;
-  case I_LINE_START:
-    niLineStart();
-    break;
-  case I_BACKSPACE:
-    iBackspace();
-    break;
-  case I_CURSOR_LEFT:
-    curMove(motionLeft(cursor).end);
-    break;
-  case I_NEWLINE:
-    niNewline();
-    break;
-  case I_CURSOR_RIGHT:
-    curMove(motionRight(cursor).end);
-    break;
-  case I_CURSOR_UP:
-    curMove(motionUp(cursor).end);
-    break;
-  case I_CURSOR_DOWN:
-    curMove(motionDown(cursor).end);
-    break;
-  default:
-    if (input <= 255) {
-      iInsertCharacter((char)input);
-    }
-    break;
+static void insertMode(int keyType, int input) {
+  // Distinguish between printable chars (keyType == OK) and special keys
+  if (input == I_LEAVE_INSERT) {
   }
+
+  if (keyType == KEY_CODE_YES) {
+    // Function / control keys
+    switch (input) {
+    case I_LINE_END:
+      niLineEnd();
+      return;
+    case I_LINE_START:
+      niLineStart();
+      return;
+    case I_BACKSPACE:
+      iBackspace();
+      return;
+    case I_CURSOR_LEFT:
+      curMove(motionLeft(cursor).end);
+      return;
+    case I_NEWLINE:
+      niNewline();
+      return;
+    case I_CURSOR_RIGHT:
+      curMove(motionRight(cursor).end);
+      return;
+    case I_CURSOR_UP:
+      curMove(motionUp(cursor).end);
+      return;
+    case I_CURSOR_DOWN:
+      curMove(motionDown(cursor).end);
+      return;
+    default:
+      // Unhandled function key in insert mode: ignore
+      break;
+    }
+  } else {
+    // Function / control keys
+    switch (input) {
+    case I_LEAVE_INSERT:
+      iLeaveInsert();
+      return;
+    case I_NEWLINE:
+      niNewline();
+      return;
+    default:
+      // Unhandled function key in insert mode: ignore
+      break;
+    }
+  }
+
+  iInsertCharacter((wint_t)input);
 }
 
 void inputHandleMacro(int *macro, int len) {
   for (size_t i = 0; i < len; i++) {
-    inputHandle(macro[i]);
+    // inputHandle(macro[i]);
   }
 }
 
-bool inputHandle(int input) {
+bool inputHandle(int keyType, wint_t ch) {
+  int input = (int)ch;
+
   if (state.mode == MODE_NORMAL && input == N_QUIT) {
     return true;
   }
 
   switch (state.mode) {
   case MODE_INSERT:
-    insertMode(input);
+    insertMode(keyType, input);
     break;
   case MODE_NORMAL:
-    normalMode(input);
+    normalMode(keyType, input);
     break;
   default:
     break;

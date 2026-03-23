@@ -35,7 +35,7 @@ bool filesSaveFromBuffer(const char *path, const Buffer *buf) {
     return false;
 
   for (int row = 0; row < buf->line_count; row++) {
-    const char *line = bufferGetLine((Pos){row, 0});
+    const char *line = bufferGetLine(row);
     if (fputs(line ? line : "", fp) == EOF) {
       fclose(fp);
       return false;

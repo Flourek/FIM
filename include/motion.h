@@ -16,4 +16,6 @@ Range motionLeft(Pos cursor);
 Range motionRight(Pos cursor);
 Range motionUp(Pos cursor);
 Range motionDown(Pos cursor);
+Range motionFileStart(Pos cursor);
+Range motionFileEnd(Pos cursor);
 #endif

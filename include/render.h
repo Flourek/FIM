@@ -2,6 +2,7 @@
 #define RENDER_H
 
 #include "cursor.h"
+#include "utf8.h"
 #include <stdbool.h>
 
 typedef struct {
@@ -20,6 +21,6 @@ bool renderInit(RenderContext *ctx);
 void renderShutdown(RenderContext *ctx);
 void renderSetCursorStyle(CursorStyle style);
 void renderDraw(RenderContext *ctx, Cursor cursor, const char *mode_name);
-int renderGetInput(RenderContext *ctx);
+int renderGetInput(RenderContext *ctx, wint_t *ch);
 
 #endif

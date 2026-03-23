@@ -106,3 +106,15 @@ Range motionDown(Pos cursor) {
   Pos end = (Pos){cursor.row + 1, cursor.col};
   return (Range){end, end, true};
 }
+
+Range motionFileStart(Pos cursor) {
+  Pos start = cursor;
+  Pos end = (Pos){0, 0};
+  return (Range){start, end, true};
+}
+
+Range motionFileEnd(Pos cursor) {
+  Pos start = cursor;
+  Pos end = bufferEnd();
+  return (Range){start, end, true};
+}

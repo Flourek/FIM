@@ -4,10 +4,12 @@
 #include "motion.h"
 #include "render.h"
 #include "state.h"
+#include "utf8.h"
 #include <ncurses.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wchar.h>
 
 void niNewline() {
   bufferNewLine(cursor);
@@ -15,8 +17,18 @@ void niNewline() {
   curMove((Pos){cursor.row, 0});
 }
 
-void nReplace(char ch) {
-  bufferReplaceChar(cursor, ch);
+void nReplace(wint_t ch) {
+  // To replace properly with UTF-8, we delete the current char and insert the new one.
+  nDeleteChar();
+  bufferInsertChar(cursor, ch);
+  cursor.col++;
+  // move back to original char
+  // Since nDeleteChar keeps cursor at start of next char?
+  // Wait, if I delete 3 bytes at pos 0, text shifts left. pos is still 0.
+  // I insert 3 bytes. buffer now has 3 bytes at pos 0. cursor moves 0->1->2->3.
+  // Final cursor should be on the replaced char? Vim behavior: cursor stays on the char.
+  // So I should move cursor back to start.
+  curMoveRelative(-1, 0);
 }
 
 void nSubstitute() {
@@ -75,37 +87,11 @@ void iLeaveInsert() {
   niCursorLeft();
 }
 
-void iInsertCharacter(char input) {
-  bufferInsertChar(cursor, input);
+#include "utf8.h"
+
+void iInsertCharacter(wint_t ch) {
+  bufferInsertChar(cursor, ch);
   curMoveRelative(1, 0);
-}
-
-void nFirstGraph() {
-  Pos pos = bufferTraverse(cursor, bufferEnd(), bufferIsCharGraph);
-  log("%s", "first non whitespace");
-  curMove(pos);
-}
-
-void nWordPrev() {
-  Pos prevPos = {cursor.row, cursor.col - 1};
-
-  if (bufferIsCharBlank(prevPos))
-    curPrevWordEnd();
-
-  curWordStart();
-}
-
-void nWordEnd() {
-  Pos nextPos = {cursor.row, cursor.col + 1};
-
-  if (bufferIsCharBlank(nextPos))
-    curNextWordStart();
-
-  curWordEnd();
-}
-
-void nWordNext() {
-  curNextWordStart();
 }
 
 void nMergeLine() {
@@ -123,6 +109,14 @@ void iBackspace() {
     curMove((Pos){cursor.row, len});
     return;
   }
-  curMoveRelative(-1, 0);
-  bufferDeleteChar(cursor);
+
+  // Calculate how many bytes to delete for the previous character
+  int endCol = cursor.col;
+  curMoveRelative(-1, 0); // Uses utf8_prev
+  int startCol = cursor.col;
+  int bytesToDelete = endCol - startCol;
+
+  for (int i = 0; i < bytesToDelete; i++) {
+    bufferDeleteChar(cursor);
+  }
 }

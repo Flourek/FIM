@@ -2,7 +2,7 @@
 #define COMMANDS_H
 
 void niNewline();
-void nReplace(char ch);
+void nReplace(wint_t ch);
 void nDeleteChar();
 void niLineEnd();
 void niLineStart();
@@ -13,7 +13,7 @@ void niCursorDown();
 void nQuit();
 void nAppend();
 void nInsert();
-void iInsertCharacter(char input);
+void iInsertCharacter(wint_t ch);
 void iLeaveInsert();
 void nFirstGraph();
 void nWordPrev();

@@ -3,6 +3,7 @@
 #include "helpers.h"
 #include "motion.h"
 #include "state.h"
+#include "utf8.h"
 #include <string.h>
 
 Cursor cursor = {0, 0};
@@ -18,8 +19,9 @@ void curClamp() {
     cursor.row = 0;
 
   int padding = state.mode == MODE_INSERT ? 0 : 1;
-  char *line = bufferGetLine((Pos){cursor.row, 0});
+  char *line = bufferGetLine(cursor.row);
   int rightclamp = (int)strlen(line ? line : "") - padding;
+  // Note: rightclamp is byte length. Clamping to byte length is correct for storage.
 
   if (rightclamp < 0)
     rightclamp = 0;
@@ -31,33 +33,29 @@ void curClamp() {
 }
 
 void curMoveRelative(int x, int y) {
-  cursor.col += x;
+  // Handle vertical movement first (simple row update)
   cursor.row += y;
+  cursor.col += x;
+
+  // Handle horizontal movement (UTF-8 aware)
+  // char *line = bufferGetLine(cursor.row);
+
+  // if (x > 0) {
+  //   for (int i = 0; i < x; i++) {
+  //     cursor.col = utf8_next(line, cursor.col);
+  //   }
+  // } else if (x < 0) {
+  //   for (int i = 0; i > x; i--) {
+  //     cursor.col = utf8_prev(line, cursor.col);
+  //   }
+  // }
+
   curClamp();
 }
 
 void curMove(Pos pos) {
   cursor.col = pos.col;
   cursor.row = pos.row;
+  // log("%i %i", cursor.row, cursor.col);
   curClamp();
-}
-
-void curNextWordStart() {
-  Range range = motionWordNextStart(cursor);
-  curMove(range.end);
-}
-
-void curWordStart() {
-  Range range = motionWordStart(cursor);
-  curMove(range.end);
-}
-
-void curPrevWordEnd() {
-  Range range = motionPrevWordEnd(cursor);
-  curMove(range.end);
-}
-
-void curWordEnd() {
-  Range range = motionWordEnd(cursor);
-  curMove(range.end);
 }

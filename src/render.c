@@ -1,5 +1,7 @@
 #include "render.h"
+#include "command.h"
 #include "helpers.h"
+#include "search.h"
 #include "state.h"
 #include <ncurses.h>
 #include <stdio.h>
@@ -15,6 +17,10 @@
 #define ANSI_CURSOR_UNDERSCORE "\x1b[4 q"
 
 #define RELATIVE_NUMBERS 1
+#define COLOR_BACKGROUND 10
+#define COLOR_TEXT 11
+#define COLOR_NUMBERS 12
+#define init_color_rgb(id, r, g, b) init_color(id, r * 4, g * 4, b * 4)
 
 static Pos viewportStart = {10, 0};
 
@@ -54,10 +60,14 @@ bool renderInit(RenderContext *ctx) {
   // in Render_init(), once (not in draw)
   start_color();
   disable_flow_control();
-  use_default_colors();                   // allow -1 = terminal default background
-  init_pair(1, COLOR_BLACK, COLOR_WHITE); // status bar
-  init_pair(2, -1, -1);                   // normal transparent text/background
-  init_pair(3, 8, -1);                    // normal transparent text/background
+  use_default_colors(); // allow -1 = terminal default background
+
+  init_color_rgb(COLOR_BACKGROUND, 8, 33, 27);   // bright red
+  init_color_rgb(COLOR_TEXT, 220, 220, 220);     // bright red
+  init_color_rgb(COLOR_NUMBERS, 143, 143, 143);  // bright red
+  init_pair(1, COLOR_BLACK, COLOR_TEXT);         // status bar
+  init_pair(2, COLOR_TEXT, COLOR_BACKGROUND);    // normal transparent text/background
+  init_pair(3, COLOR_NUMBERS, COLOR_BACKGROUND); // numbers
   set_escdelay(0);
 
   WINDOW *main_win = newwin(LINES - 2, COLS, 0, 0);
@@ -69,7 +79,7 @@ bool renderInit(RenderContext *ctx) {
   keypad(main_win, TRUE);
 
   WINDOW *status_win = newwin(2, 0, LINES - 2, 0);
-  leaveok(status_win, TRUE);
+  // leaveok(status_win, TRUE);
 
   ctx->main_window = main_win;
   ctx->status_window = status_win;
@@ -112,32 +122,54 @@ void renderSetCursorStyle(CursorStyle style) {
   }
 }
 
-void renderDrawStatus(RenderContext *ctx, const char *mode_name) {
+char *makeStatusText(WINDOW *status_win) {
+  int w = getmaxx(status_win);
+  char *msg = malloc(w);
+  memset(msg, ' ', w);
+
+  char right[100];
+  int rightLen = snprintf(right, 100, "%d,%d", cursor.row + 1, cursor.col + 1);
+  // int rightLen = strlen(right);
+  memcpy(msg + w - rightLen - 15, right, rightLen);
+
+  Buffer *buf = bufferGet();
+  char left[100];
+  int leftLen = snprintf(left, 100, "DEBUG: mode=%s | LINES: %d | KEY: %s %d | MSG: %s", ModeNames[state.mode], buf->line_count, "chuj", state.last_key, state.log_message);
+  memcpy(msg, left, leftLen);
+
+  msg[w] = '\0';
+  return msg;
+}
+
+void renderDrawStatus(RenderContext *ctx) {
   WINDOW *status_win = (WINDOW *)ctx->status_window;
 
   werase(status_win);
 
   Buffer *buf = bufferGet();
 
-  int w = getmaxx(status_win);
-  char msg[100] = "";
-  snprintf(msg, 100, "%d,%d    ", cursor.row + 1, cursor.col + 1);
-  int msg_len = (int)strlen(msg);
-  int x = w - msg_len;
-  if (x < 0)
-    x = 0;
+  wattron(status_win, A_BOLD);
   wattron(status_win, COLOR_PAIR(1));
-  mvwhline(status_win, 0, 0, ' ', x);
-  mvwprintw(status_win, 0, x, "%s", msg);
+
+  char *text = makeStatusText(status_win);
+  mvwprintw(status_win, 0, 0, text);
+  free(text);
   wattroff(status_win, COLOR_PAIR(1));
 
-  wattron(status_win, A_BOLD);
+  if (state.mode == MODE_COMMAND) {
+    const char *command = commandGetLineBuffer();
+    mvwaddch(status_win, 1, 0, ':');
+    mvwprintw(status_win, 1, 1, "%s", command);
+  } else if (state.mode == MODE_SEARCH) {
+    const char *query = searchGetLineBuffer();
+    mvwaddch(status_win, 1, 0, '/');
+    mvwprintw(status_win, 1, 1, "%s", query);
+  }
 
-  mvwprintw(status_win, 1, 0, "DEBUG: mode=%s | LINES: %d | KEY: %s %d | MSG: %s", mode_name, buf->line_count, humanKeyName(state.last_key), state.last_key, state.log_message);
-  wclrtoeol(status_win);
+  // wclrtoeol(status_win);
   wattroff(status_win, A_BOLD);
 
-  log("");
+  // log("");
   wrefresh(status_win);
 }
 
@@ -236,26 +268,34 @@ void renderDrawBuffer(RenderContext *ctx) {
     }
   }
 
+  wmove(main_win, cursor.row - viewportStart.row, 4 + cursor.col - viewportStart.col);
   wrefresh(main_win);
-  renderSetCursor(main_win, numbersWidth);
 }
 
-void renderSetCursor(WINDOW *win, int numbersWidth) {
-  char *test = bufferGetLine(cursor.row);
-  int idx = utf8_column_to_byte(test, cursor.col);
-  log("%i c: ", utf8_next(test, idx));
-  wmove(win, cursor.row - viewportStart.row, numbersWidth + cursor.col - viewportStart.col);
+void renderSetCursor(RenderContext *ctx) {
+  WINDOW *status_win = (WINDOW *)ctx->status_window;
+  WINDOW *main_win = (WINDOW *)ctx->main_window;
+
+  // log("%i %i %i", chuj, classAt(cursor), isLineEmpty(cursor.row));
+  if (state.mode == MODE_COMMAND) {
+    // wmove(status_win, 1, 0);
+    wrefresh(status_win);
+    // waddch(status_win, "E");
+  } else {
+    wrefresh(main_win);
+    // wmove(main_win, cursor.row - viewportStart.row, 4 + cursor.col - viewportStart.col);
+  }
 }
 
-void renderDraw(RenderContext *ctx, Cursor cursor, const char *mode_name) {
+void renderDraw(RenderContext *ctx, Cursor cursor) {
   renderDrawBuffer(ctx);
-  renderDrawStatus(ctx, mode_name);
+  renderDrawStatus(ctx);
+  renderSetCursor(ctx);
 }
 
 int renderGetInput(RenderContext *ctx, wint_t *ch) {
   WINDOW *main_win = (WINDOW *)ctx->main_window;
   int ret = wget_wch(main_win, ch);
-  state.last_key = (int)*ch;
 
   // log("keyType=%d ch_dec=%d ch_hex=%04X", ret, (int)*ch, (int)*ch);
 

@@ -20,7 +20,7 @@ typedef enum {
 bool renderInit(RenderContext *ctx);
 void renderShutdown(RenderContext *ctx);
 void renderSetCursorStyle(CursorStyle style);
-void renderDraw(RenderContext *ctx, Cursor cursor, const char *mode_name);
+void renderDraw(RenderContext *ctx, Cursor cursor);
 int renderGetInput(RenderContext *ctx, wint_t *ch);
 
 #endif

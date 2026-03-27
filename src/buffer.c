@@ -5,11 +5,14 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <wctype.h>
 
 #define LINE_CAPACITY 1024
 
 static Buffer *buffers[1024];
 static int buffer_count = 0;
+
+// all pos args are screen cursor grid aligned, utf8 only internal ahh b should...
 
 static bool isValidPos(Pos pos) {
   Buffer *buf = bufferGet();
@@ -55,15 +58,23 @@ char *bufferGetLine(int row) {
   return buf->lines[row];
 }
 
-char bufferGetChar(Pos pos) {
+wchar_t bufferGetWChar(Pos pos) {
   if (!isValidPos(pos))
-    return '\0';
+    return L'\0';
 
   char *line = bufferGetLine(pos.row);
   if (!line)
-    return '\0';
+    return L'\0';
 
-  return line[pos.col];
+  size_t len = bufferLineLength(pos.row);
+  int idx = utf8_column_to_byte(line, pos.col);
+
+  wchar_t wc;
+  int res = mbtowc(&wc, line + idx, len - (size_t)idx);
+  if (res <= 0)
+    return L'\0';
+
+  return wc;
 }
 
 void bufferFree(Buffer *buf) {
@@ -295,8 +306,44 @@ Range bufferNormalizeRange(Range range) {
   return range;
 }
 
+Pos bufferNextWChar(Pos pos) {
+  Pos out;
+
+  char *line = bufferGetLine(pos.row);
+  int posIndex = utf8_column_to_byte(line, pos.col);
+  int nextIndex = utf8_next(line, posIndex);
+  out = (Pos){pos.row, utf8_byte_to_column(line, nextIndex)};
+
+  if (posIndex >= bufferLineLength(pos.row)) {
+    out.row = pos.row + 1;
+    out.col = 0;
+  }
+
+  return out;
+}
+
+Pos bufferPrevWChar(Pos pos) {
+  Pos out;
+
+  char *line = bufferGetLine(pos.row);
+  int posIndex = utf8_column_to_byte(line, pos.col);
+  int prevIndex = utf8_prev(line, posIndex);
+  out = (Pos){pos.row, utf8_byte_to_column(line, prevIndex)};
+
+  if (posIndex <= 0) {
+    out.row = pos.row - 1;
+    out.col = bufferLineLength(out.row);
+
+    if (out.row < 0) {
+      return bufferStart();
+    }
+  }
+
+  return out;
+}
+
 Pos bufferStart(void) {
-  return (Pos){0, -1};
+  return (Pos){0, 0};
 }
 
 Pos bufferEnd(void) {
@@ -308,60 +355,16 @@ Pos bufferEnd(void) {
   return (Pos){row, bufferLineLength(row)};
 }
 
-Pos bufferTraverse(Pos start, Pos end, TraverseFn fn) {
-  bool forward = start.row < end.row || (start.row == end.row && start.col <= end.col);
-
-  if (forward) {
-    int xStart = start.col;
-
-    for (int y = start.row; y <= end.row; y++) {
-      char *line = bufferGetLine(y);
-      int xEnd = (y == end.row) ? end.col : (int)strlen(line);
-
-      // if on the end row, iterate untill the final column, else full line
-      for (int x = xStart; x <= xEnd; x++) {
-        Pos pos = {y, x};
-
-        bool result = fn(pos);
-        if (result)
-          return pos;
-      }
-
-      xStart = 0;
-    }
-  } else {
-    int xStart = start.col;
-
-    for (int y = start.row; y >= end.row; y--) {
-      if (y != start.row)
-        xStart = bufferLineLength(y);
-
-      int xEnd = (y == end.row) ? end.col : 0;
-
-      for (int x = xStart; x >= xEnd; x--) {
-        Pos pos = {y, x};
-
-        bool result = fn(pos);
-        if (result)
-          return pos;
-      }
-    }
-  }
-
-  return start;
+bool isBufferStart(Pos pos) {
+  Pos start = bufferStart();
+  return comparePos(pos, start) <= 0;
 }
 
-bool bufferIsCharGraph(Pos pos) {
-  char c = bufferGetChar(pos);
-  return isgraph((unsigned char)c);
+bool isBufferEnd(Pos pos) {
+  Pos end = bufferEnd();
+  return comparePos(pos, end) >= 0;
 }
 
-bool bufferIsCharBlank(Pos pos) {
-  char c = bufferGetChar(pos);
-
-  // file begin and end of lines
-  if (c == '\0')
-    return true;
-
-  return isspace((unsigned char)c);
+bool isLineEmpty(int row) {
+  return bufferGetWChar((Pos){row, 0}) == '\0';
 }

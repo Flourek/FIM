@@ -6,7 +6,9 @@
 
 typedef enum {
   MODE_NORMAL,
-  MODE_INSERT
+  MODE_INSERT,
+  MODE_COMMAND,
+  MODE_SEARCH
 } EditorMode;
 
 typedef struct {

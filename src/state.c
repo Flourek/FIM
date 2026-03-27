@@ -7,4 +7,4 @@ State state = {
     .ctx = 0,
 };
 
-const char *ModeNames[] = {"Normal", "Insert", "Visual", "Visual_line"};
+const char *ModeNames[] = {"Normal", "Insert", "Command", "Search"};

@@ -50,7 +50,7 @@ int main() {
   bufferInsertLine(28, "ut enim ad minim veniam");
   bufferInsertLine(29, "ut enim ad minim veniam");
   bufferInsertLine(30, "consectetur adipiscing elit");
-  renderDraw(&render_ctx, cursor, ModeNames[state.mode]);
+  renderDraw(&render_ctx, cursor);
 
   while (true) {
     wint_t ch;
@@ -60,7 +60,7 @@ int main() {
       break;
     }
 
-    renderDraw(&render_ctx, cursor, ModeNames[state.mode]);
+    renderDraw(&render_ctx, cursor);
   }
 
   renderShutdown(&render_ctx);

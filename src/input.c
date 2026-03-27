@@ -1,60 +1,29 @@
 #include "input.h"
-#include "commands.h"
+#include "actions.h"
+#include "command.h"
 #include "files.h"
 #include "helpers.h"
 #include "motion.h"
 #include "render.h"
+#include "search.h"
 #include "state.h"
 #include <ncurses.h>
 #include <wchar.h>
 
-#define N_CURSOR_RIGHT 'l'
-#define N_CURSOR_LEFT 'h'
-#define N_CURSOR_UP 'k'
-#define N_CURSOR_DOWN 'j'
-#define I_CURSOR_RIGHT KEY_RIGHT
-#define I_CURSOR_LEFT KEY_LEFT
-#define I_CURSOR_UP KEY_UP
-#define I_CURSOR_DOWN KEY_DOWN
-#define N_QUIT 'q'
-#define N_APPEND 'a'
-#define N_INSERT 'i'
-#define I_LEAVE_INSERT 27
-#define I_BACKSPACE KEY_BACKSPACE
-#define N_NEWLINE 'K'
-#define N_MERGELINE 'J'
-#define N_LINE_START '0'
-#define N_LINE_END '$'
-#define I_LINE_START KEY_HOME
-#define I_LINE_END KEY_END
-#define I_NEWLINE 10
-#define N_CHUJ 'c'
-#define N_WORD_NEXT 'w'
-#define N_WORD_PREV 'b'
-#define N_WORD_END 'e'
-#define N_FIRST_GRAPH '^'
-#define N_REPLACE 'r'
-#define N_DELETE_CHAR 'x'
-#define N_DELETE 'd'
-#define N_SUBSTITUTE 's'
-#define N_SAVE 19
-#define N_LOAD 23
-#define N_FILE_END 'G'
-#define N_G_KEY 'g'
-#define N_G_FILE_START 'g'
-
 #include "utf8.h"
 
 // keyType is the return of wget_wch (OK or KEY_CODE_YES), ch is the character/key.
-static void waitForInput(int *keyTypeOut, wint_t *chOut) {
+// static void waitForInput(int *keyTypeOut, wint_t *chOut) {
+static wint_t waitForInput() {
   renderSetCursorStyle(CURSOR_STYLE_UNDERSCORE);
   wint_t ch;
   int keyType = renderGetInput(state.ctx, &ch);
   renderSetCursorStyle(CURSOR_STYLE_BLOCK);
-  if (keyTypeOut)
-    *keyTypeOut = keyType;
-  if (chOut)
-    *chOut = ch;
+  return ch;
+  // if (keyTypeOut)
+  //   *keyTypeOut = keyType;
+  // if (chOut)
+  //   *chOut = ch;
 }
 
 Range handleMotion(int input, Pos cur) {
@@ -88,14 +57,23 @@ Range handleMotion(int input, Pos cur) {
   case N_FIRST_GRAPH:
     out = motionFirstGraph(cur);
     break;
+  case N_FIND_NEXT:
+    out = motionFind(cur, (wchar_t)waitForInput(), DIR_FORWARD);
+    break;
+  case N_FIND_PREV:
+    out = motionFind(cur, (wchar_t)waitForInput(), DIR_BACKWARD);
+    break;
+  case N_FIND_REPEAT:
+    out = motionFind(cur, L'\0', DIR_FORWARD);
+    break;
   case N_WORD_PREV:
-    out = motionWordPrevStart(cur);
+    out = motionWord(cur, DIR_BACKWARD);
     break;
   case N_WORD_END:
-    out = motionWordNextEnd(cur);
+    out = motionNextWordEnd(cur);
     break;
   case N_WORD_NEXT:
-    out = motionWordNextStart(cur);
+    out = motionWord(cur, DIR_FORWARD);
     break;
   default:
     return (Range){cur, cur};
@@ -114,8 +92,7 @@ bool nDelete(Range range) {
 
 void waitForMotion() {
   int keyType;
-  wint_t ch;
-  waitForInput(&keyType, &ch);
+  wint_t ch = waitForInput();
 
   int input = (int)ch;
   if (input == I_LEAVE_INSERT)
@@ -138,10 +115,51 @@ void waitForMotion() {
   nDelete(truncated);
 }
 
-static void normalMode(int keyType, int input) {
+static void linebufferInput(int keyType, wint_t input) {
+  LineBuffer *buf = 0;
+  void (*runFn)(void) = 0;
+
+  if (state.mode == MODE_COMMAND) {
+    buf = commandGetLineBuffer();
+    runFn = commandRun;
+  } else if (state.mode == MODE_SEARCH) {
+    buf = searchGetLineBuffer();
+    runFn = searchRun;
+  } else {
+    return;
+  }
+
+  switch (input) {
+  case I_LEAVE_INSERT:
+    state.mode = MODE_NORMAL;
+    lineBufferClear(buf);
+    break;
+  case I_BACKSPACE:
+    lineBufferBackspace(buf);
+    break;
+  case I_NEWLINE:
+    state.mode = MODE_NORMAL;
+    runFn();
+    break;
+  default:
+    if (keyType == OK) {
+      lineBufferInsertWChar(buf, (wchar_t)input);
+    }
+    break;
+  }
+}
+
+static void normalMode(int keyType, wint_t input) {
   switch (input) {
   case N_INSERT:
     nInsert();
+    break;
+  case N_COMMAND:
+    state.mode = MODE_COMMAND;
+    break;
+  case N_SEARCH:
+    state.mode = MODE_SEARCH;
+    searchClear();
     break;
   case N_DELETE:
     waitForMotion();
@@ -185,10 +203,8 @@ static void normalMode(int keyType, int input) {
   }
 }
 
-static void insertMode(int keyType, int input) {
+static void insertMode(int keyType, wint_t input) {
   // Distinguish between printable chars (keyType == OK) and special keys
-  if (input == I_LEAVE_INSERT) {
-  }
 
   if (keyType == KEY_CODE_YES) {
     // Function / control keys
@@ -246,7 +262,8 @@ void inputHandleMacro(int *macro, int len) {
 }
 
 bool inputHandle(int keyType, wint_t ch) {
-  int input = (int)ch;
+  wint_t input = ch;
+  state.last_key = ch;
 
   if (state.mode == MODE_NORMAL && input == N_QUIT) {
     return true;
@@ -258,6 +275,10 @@ bool inputHandle(int keyType, wint_t ch) {
     break;
   case MODE_NORMAL:
     normalMode(keyType, input);
+    break;
+  case MODE_COMMAND:
+  case MODE_SEARCH:
+    linebufferInput(keyType, input);
     break;
   default:
     break;

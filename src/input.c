@@ -12,21 +12,34 @@
 
 #include "utf8.h"
 
-// keyType is the return of wget_wch (OK or KEY_CODE_YES), ch is the character/key.
-// static void waitForInput(int *keyTypeOut, wint_t *chOut) {
+#include <string.h>
+
+static void keyComboClear() {
+  state.key_combo[0] = '\0';
+}
+
+static void keyComboAppend(wint_t ch) {
+  if (ch <= 0 || ch > 127)
+    return;
+
+  size_t len = strlen(state.key_combo);
+  if (len + 1 >= sizeof(state.key_combo))
+    return;
+
+  state.key_combo[len] = (char)ch;
+  state.key_combo[len + 1] = '\0';
+}
+
 static wint_t waitForInput() {
   renderSetCursorStyle(CURSOR_STYLE_UNDERSCORE);
   wint_t ch;
   int keyType = renderGetInput(state.ctx, &ch);
   renderSetCursorStyle(CURSOR_STYLE_BLOCK);
+  keyComboAppend(ch);
   return ch;
-  // if (keyTypeOut)
-  //   *keyTypeOut = keyType;
-  // if (chOut)
-  //   *chOut = ch;
 }
 
-Range handleMotion(int input, Pos cur) {
+Range handleMotion(wint_t input, Pos cur) {
   Range out;
 
   switch (input) {
@@ -58,25 +71,31 @@ Range handleMotion(int input, Pos cur) {
     out = motionFirstGraph(cur);
     break;
   case N_FIND_NEXT:
-    out = motionFind(cur, (wchar_t)waitForInput(), DIR_FORWARD);
+    out = motionFindNext(cur, (wchar_t)waitForInput(), true);
     break;
   case N_FIND_PREV:
-    out = motionFind(cur, (wchar_t)waitForInput(), DIR_BACKWARD);
+    out = motionFindPrev(cur, (wchar_t)waitForInput(), true);
     break;
   case N_FIND_REPEAT:
-    out = motionFind(cur, L'\0', DIR_FORWARD);
+    out = motionFindNext(cur, L'\0', true);
+    break;
+  case N_TO_CHAR_NEXT:
+    out = motionFindNext(cur, (wchar_t)waitForInput(), false);
+    break;
+  case N_TO_CHAR_PREV:
+    out = motionFindPrev(cur, (wchar_t)waitForInput(), false);
     break;
   case N_WORD_PREV:
-    out = motionWord(cur, DIR_BACKWARD);
+    out = motionWordPrev(cur);
     break;
   case N_WORD_END:
     out = motionNextWordEnd(cur);
     break;
   case N_WORD_NEXT:
-    out = motionWord(cur, DIR_FORWARD);
+    out = motionWordNext(cur);
     break;
   default:
-    return (Range){cur, cur};
+    return INVALID_RANGE;
   }
 
   return out;
@@ -84,35 +103,49 @@ Range handleMotion(int input, Pos cur) {
 
 bool nDelete(Range range) {
 
+  if (!range.valid)
+    return false;
+
   range = bufferNormalizeRange(range);
   bufferDeleteRange(range);
   curMove(range.start);
   return false;
 }
 
-void waitForMotion() {
-  int keyType;
+Range handleTextObject(bool inner) {
+  wint_t key = waitForInput();
+
+  if (key == I_LEAVE_INSERT)
+    return INVALID_RANGE;
+
+  if (key == N_WORD_NEXT) {
+    if (inner) {
+      return motionWordInner(cursor);
+    } else {
+      return motionWordAround(cursor);
+    }
+  }
+
+  return INVALID_RANGE;
+}
+
+Range waitForMotion() {
   wint_t ch = waitForInput();
 
   int input = (int)ch;
-  if (input == I_LEAVE_INSERT)
-    return;
+  switch (input) {
+  case I_LEAVE_INSERT:
+    return INVALID_RANGE;
+  case TEXT_OBJECT_INNER:
+    return handleTextObject(true);
+  case TEXT_OBJECT_AROUND:
+    return handleTextObject(false);
+  default:
+    return handleMotion(input, cursor);
+    break;
+  }
 
-  Range range = handleMotion(input, cursor);
   // log("Range: <%i,%i> - <%i,%i>", range.start.row, range.start.col, range.end.row, range.end.col);
-
-  Range truncated = range;
-  if (!range.inclusive) {
-    truncated.end.col--;
-  }
-
-  if (range.start.row != range.end.row) {
-    // return;
-    // range.end.row = range.start.row;
-    // range.end.col = bufferLineLength(range.start.row);
-  }
-
-  nDelete(truncated);
 }
 
 static void linebufferInput(int keyType, wint_t input) {
@@ -161,9 +194,11 @@ static void normalMode(int keyType, wint_t input) {
     state.mode = MODE_SEARCH;
     searchClear();
     break;
-  case N_DELETE:
-    waitForMotion();
+  case N_DELETE: {
+    Range range = waitForMotion();
+    nDelete(range);
     break;
+  }
   case N_MERGELINE:
     nMergeLine();
     break;
@@ -186,10 +221,7 @@ static void normalMode(int keyType, wint_t input) {
     nDeleteChar();
     break;
   case N_REPLACE: {
-    int kt;
-    wint_t ch;
-    waitForInput(&kt, &ch);
-    // Use the real Unicode codepoint for replace
+    wint_t ch = waitForInput();
     nReplace(ch);
   } break;
   case N_CHUJ:
@@ -198,7 +230,9 @@ static void normalMode(int keyType, wint_t input) {
     break;
   default:
     Range range = handleMotion(input, cursor);
-    curMove(range.end);
+    if (range.valid) {
+      curMove(range.end);
+    }
     break;
   }
 }
@@ -257,13 +291,14 @@ static void insertMode(int keyType, wint_t input) {
 
 void inputHandleMacro(int *macro, int len) {
   for (size_t i = 0; i < len; i++) {
-    // inputHandle(macro[i]);
+    inputHandle(0, macro[i]);
   }
 }
 
 bool inputHandle(int keyType, wint_t ch) {
   wint_t input = ch;
   state.last_key = ch;
+  keyComboAppend(ch);
 
   if (state.mode == MODE_NORMAL && input == N_QUIT) {
     return true;
@@ -283,6 +318,8 @@ bool inputHandle(int keyType, wint_t ch) {
   default:
     break;
   }
+
+  keyComboClear();
 
   return false;
 }

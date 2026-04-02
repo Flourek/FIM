@@ -14,6 +14,7 @@ typedef enum {
 typedef struct {
   EditorMode mode;
   int last_key;
+  char key_combo[16];
   char log_message[LOG_MESSAGE_CAPACITY];
   RenderContext *ctx;
 } State;

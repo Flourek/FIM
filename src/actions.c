@@ -21,14 +21,8 @@ void nReplace(wint_t ch) {
   // To replace properly with UTF-8, we delete the current char and insert the new one.
   nDeleteChar();
   bufferInsertChar(cursor, ch);
-  cursor.col++;
-  // move back to original char
-  // Since nDeleteChar keeps cursor at start of next char?
-  // Wait, if I delete 3 bytes at pos 0, text shifts left. pos is still 0.
-  // I insert 3 bytes. buffer now has 3 bytes at pos 0. cursor moves 0->1->2->3.
-  // Final cursor should be on the replaced char? Vim behavior: cursor stays on the char.
-  // So I should move cursor back to start.
-  curMoveRelative(-1, 0);
+  // cursor.col++;
+  // curMoveRelative(-1, 0);
 }
 
 void nSubstitute() {

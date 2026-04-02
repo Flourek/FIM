@@ -14,7 +14,8 @@ typedef enum {
   DIR_BACKWARD
 } Direction;
 
-Range motionWord(Pos cursor, Direction dir);
+Range motionWordNext(Pos cursor);
+Range motionWordPrev(Pos cursor);
 
 Range motionNextWordEnd(Pos cursor);
 Range motionFirstGraph(Pos cursor);
@@ -29,6 +30,10 @@ Range motionDown(Pos cursor);
 Range motionFileStart(Pos cursor);
 Range motionFileEnd(Pos cursor);
 
-Range motionFind(Pos cursor, wchar_t wc, Direction dir);
+Range motionFindNext(Pos cursor, wchar_t wc, bool until);
+Range motionFindPrev(Pos cursor, wchar_t wc, bool until);
 
+Range motionInner(Pos cursor, wchar_t ch);
+Range motionWordInner(Pos cursor);
+Range motionWordAround(Pos cursor);
 #endif

@@ -32,11 +32,15 @@ static int comparePos(Pos a, Pos b) {
   return a.col - b.col;
 }
 
-Buffer *bufferNew(void) {
+Buffer *bufferNew(const char *path) {
   Buffer *buf = malloc(sizeof(Buffer));
   buf->lines = NULL;
   buf->line_count = 0;
   buf->index = buffer_count;
+  buf->path = NULL;
+  if (path) {
+    buf->path = strdupSafe(path);
+  }
   buffers[buffer_count] = buf;
   buffer_count++;
   return buf;
@@ -85,6 +89,9 @@ void bufferFree(Buffer *buf) {
     free(buf->lines[i]);
   }
   free(buf->lines);
+  if (buf->path) {
+    free(buf->path);
+  }
   free(buf);
   buffer_count--;
 }
@@ -228,11 +235,13 @@ bool bufferDeleteChar(Pos pos) {
 }
 
 bool bufferDeleteRange(Range range) {
+  if (!range.valid)
+    return false;
+
   Buffer *buf = bufferGet();
   if (!buf || buf->line_count <= 0)
     return true;
 
-  range = bufferNormalizeRange(range);
   Pos start = range.start;
   Pos end = range.end;
 
@@ -297,11 +306,23 @@ bool bufferDeleteRange(Range range) {
 }
 
 Range bufferNormalizeRange(Range range) {
-  if (comparePos(range.start, range.end) > 0) {
+  if (!range.valid)
+    return range;
+
+  bool backward = comparePos(range.start, range.end) > 0;
+
+  if (backward) {
     Pos tmp = range.start;
     range.start = range.end;
     range.end = tmp;
   }
+
+  // w, b
+  if (!range.inclusive) {
+    range.end.col--;
+  }
+
+  // log("CHUJ: %i,%i - %i,%i, %s", range.start.row, range.start.col, range.end.row, range.end.col, range.inclusive ? "Inclusive" : "Exclusive");
 
   return range;
 }
@@ -367,4 +388,27 @@ bool isBufferEnd(Pos pos) {
 
 bool isLineEmpty(int row) {
   return bufferGetWChar((Pos){row, 0}) == '\0';
+}
+
+void bufferClear(void) {
+  Buffer *buf = bufferGet();
+  if (!buf || !buf->lines)
+    return;
+
+  for (int i = 0; i < buf->line_count; i++) {
+    free(buf->lines[i]);
+  }
+
+  free(buf->lines);
+  buf->lines = NULL;
+  buf->line_count = 0;
+}
+
+const char *bufferGetFilename(void) {
+  Buffer *buf = bufferGet();
+  if (!buf || !buf->path)
+    return NULL;
+
+  const char *base = strrchr(buf->path, '/');
+  return base ? base + 1 : buf->path;
 }

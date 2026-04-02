@@ -132,9 +132,12 @@ char *makeStatusText(WINDOW *status_win) {
   // int rightLen = strlen(right);
   memcpy(msg + w - rightLen - 15, right, rightLen);
 
-  Buffer *buf = bufferGet();
   char left[100];
-  int leftLen = snprintf(left, 100, "DEBUG: mode=%s | LINES: %d | KEY: %s %d | MSG: %s", ModeNames[state.mode], buf->line_count, "chuj", state.last_key, state.log_message);
+  Buffer *buf = bufferGet();
+  const char *name = bufferGetFilename();
+  if (!name)
+    name = "[No Name]";
+  int leftLen = snprintf(left, 100, " %s | DEBUG: mode=%s | LINES: %d | KEY: %s %d | MSG: %s", name, ModeNames[state.mode], buf->line_count, "chuj", state.last_key, state.log_message);
   memcpy(msg, left, leftLen);
 
   msg[w] = '\0';
@@ -164,6 +167,8 @@ void renderDrawStatus(RenderContext *ctx) {
     const char *query = searchGetLineBuffer();
     mvwaddch(status_win, 1, 0, '/');
     mvwprintw(status_win, 1, 1, "%s", query);
+  } else {
+    mvwprintw(status_win, 1, 1, "FUH %s", state.key_combo);
   }
 
   // wclrtoeol(status_win);
@@ -295,9 +300,8 @@ void renderDraw(RenderContext *ctx, Cursor cursor) {
 
 int renderGetInput(RenderContext *ctx, wint_t *ch) {
   WINDOW *main_win = (WINDOW *)ctx->main_window;
+  renderDraw(ctx, cursor);
   int ret = wget_wch(main_win, ch);
-
   // log("keyType=%d ch_dec=%d ch_hex=%04X", ret, (int)*ch, (int)*ch);
-
   return ret;
 }

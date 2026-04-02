@@ -1,5 +1,7 @@
 #include "files.h"
+#include "helpers.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define FILE_LINE_CAPACITY 1024
@@ -11,6 +13,11 @@ bool filesLoadIntoBuffer(const char *path, Buffer *buf) {
   FILE *fp = fopen(path, "r");
   if (!fp)
     return false;
+
+  if (buf->path) {
+    free(buf->path);
+  }
+  buf->path = strdupSafe(path);
 
   // TODO: if you want load to replace content, delete old lines first.
   char line[FILE_LINE_CAPACITY];

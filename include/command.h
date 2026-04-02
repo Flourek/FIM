@@ -6,7 +6,7 @@
 typedef struct {
   char *name;
   int min_abb;
-  void (*run)();
+  void (*run)(const char *);
 } Command;
 
 void commandInsertWChar(wchar_t wc);
@@ -16,4 +16,6 @@ void commandClear(void);
 LineBuffer *commandGetLineBuffer(void);
 void commandRun(void);
 
+void cmdWrite(const char *args);
+void cmdEdit(const char *args);
 #endif

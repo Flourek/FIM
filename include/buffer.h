@@ -12,17 +12,25 @@ typedef struct {
   Pos start;
   Pos end;
   bool inclusive;
+  bool valid;
 } Range;
+
+#define INVALID_RANGE                                                            \
+  (Range) {                                                                      \
+    { 0, 0 } , { 0, 0 } , false, false                                           \
+  }
 
 typedef struct {
   int index;
   char **lines;
   int line_count;
+  char *path;
+
 } Buffer;
 
 typedef bool (*TraverseFn)(Pos pos);
 
-Buffer *bufferNew(void);
+Buffer *bufferNew(const char *path);
 void bufferFree(Buffer *buf);
 Buffer *bufferGet();
 
@@ -55,4 +63,6 @@ bool isLineEmpty(int row);
 
 bool bufferDeleteRange(Range range);
 Range bufferNormalizeRange(Range range);
+void bufferClear(void);
+const char *bufferGetFilename(void);
 #endif

@@ -52,6 +52,10 @@ void curMoveRelative(int x, int y) {
 
   curClamp();
 }
+void curReset() {
+  cursor.col = 0;
+  cursor.row = 0;
+}
 
 void curMove(Pos pos) {
   cursor.col = pos.col;

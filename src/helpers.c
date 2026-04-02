@@ -29,3 +29,18 @@ void log(const char *fmt, ...) {
   vsnprintf(state.log_message, sizeof(state.log_message), fmt, args);
   va_end(args);
 }
+
+char getMatchingSymbol(char c) {
+  // clang-format off
+    switch (c) {
+        case '(': return ')';
+        case ')': return '(';
+        case '{': return '}';
+        case '}': return '{';
+        case '[': return ']';
+        case ']': return '[';
+        case '<': return '>';
+        case '>': return '<';
+        default: return 0; // no match
+    }
+}

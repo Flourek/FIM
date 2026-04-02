@@ -31,8 +31,8 @@
 #define N_FIND_NEXT 'f'
 #define N_FIND_PREV 'F'
 #define N_FIND_REPEAT ';'
-#define N_TO_CHAR_NEXT 't'
-#define N_TO_CHAR_PREV 'T'
+#define N_UNTIL_NEXT 't'
+#define N_UNTIL_PREV 'T'
 #define N_FIRST_GRAPH '^'
 #define N_REPLACE 'r'
 #define N_DELETE_CHAR 'x'
@@ -47,6 +47,7 @@
 #define N_SEARCH '/'
 #define TEXT_OBJECT_INNER 'i'
 #define TEXT_OBJECT_AROUND 'a'
+#define N_MATCHING_SYMBOL '%'
 // keyType is the return value of wget_wch: OK or KEY_CODE_YES.
 bool inputHandle(int keyType, wint_t ch);
 

@@ -78,14 +78,15 @@ Range motionFindNext(Pos cursor, wchar_t wc, bool until) {
   while (!isBufferEnd(p)) {
     p = bufferNextWChar(p);
     if (bufferGetWChar(p) == wc) {
-      if (!until) {
+      if (until) {
         // 't': position just before the found character
         p = bufferPrevWChar(p);
       }
       return (Range){cursor, p, true, true};
     }
   }
-  return (Range){cursor, cursor, true, true};
+
+  return INVALID_RANGE;
 }
 
 Range motionFindPrev(Pos cursor, wchar_t wc, bool until) {
@@ -99,7 +100,7 @@ Range motionFindPrev(Pos cursor, wchar_t wc, bool until) {
   while (!isBufferStart(p)) {
     p = bufferPrevWChar(p);
     if (bufferGetWChar(p) == wc) {
-      if (!until) {
+      if (until) {
         // 'T': position just after the found character
         p = bufferNextWChar(p);
       }
@@ -205,9 +206,72 @@ Range motionWordAround(Pos cursor) {
   return (Range){start, end, true, true};
 }
 
-Range motionInner(Pos cursor, wchar_t ch) {
+Range motionMatchingSymbol(Pos cursor) {
+  Pos end = cursor;
+  wchar_t original = bufferGetWChar(cursor);
+
+  if (original > 255)
+    return;
+
+  wchar_t matching = (wchar_t)getMatchingSymbol(original);
+  bool forward = original < matching; // ascii values, closing ones always later
+
+  bool (*stepEndFn)(Pos) = forward ? isBufferEnd : isBufferStart;
+  Pos (*stepFn)(Pos) = forward ? bufferNextWChar : bufferPrevWChar;
+  int skip = 0;
+
+  while (!stepEndFn(end)) {
+    end = stepFn(end);
+
+    if (bufferGetWChar(end) == original) {
+      skip++;
+    }
+
+    if (bufferGetWChar(end) == matching) {
+      if (skip <= 0)
+        return (Range){cursor, end, true, true};
+      else
+        skip--;
+    }
+  }
+
+  return INVALID_RANGE;
+}
+
+Range motionCharAround(Pos cursor, wchar_t wc) {
   Pos start = cursor;
-  Pos end = bufferEnd();
-  // if (ch ==)
+  Pos end = cursor;
+
+  // if not at the [ then look forwad and then back for one
+  if (bufferGetWChar(start) != wc) {
+    Range range;
+    range = motionFindNext(start, wc, false);
+
+    if (!range.valid)
+      range = motionFindPrev(start, wc, false);
+
+    if (!range.valid)
+      return INVALID_RANGE;
+    else
+      start = range.end;
+  }
+
+  end = motionMatchingSymbol(start).end;
+
+  log("CHAR AROUND: %i,%i - %i,%i", start.row, start.col, end.row, end.col);
   return (Range){start, end, true, true};
+}
+
+Range motionCharInner(Pos cursor, wchar_t wc) {
+  Range out = motionCharAround(cursor, wc);
+  out.start.col++;
+
+  if (out.end.col == 0) {
+    out.end.row--;
+    out.end.col == bufferLineLength(out.end.row);
+  } else {
+    out.end.col--;
+  }
+
+  return out;
 }

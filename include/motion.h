@@ -33,7 +33,9 @@ Range motionFileEnd(Pos cursor);
 Range motionFindNext(Pos cursor, wchar_t wc, bool until);
 Range motionFindPrev(Pos cursor, wchar_t wc, bool until);
 
-Range motionInner(Pos cursor, wchar_t ch);
+Range motionMatchingSymbol(Pos cursor);
+Range motionCharAround(Pos cursor, wchar_t wc);
+Range motionCharInner(Pos cursor, wchar_t wc);
 Range motionWordInner(Pos cursor);
 Range motionWordAround(Pos cursor);
 #endif

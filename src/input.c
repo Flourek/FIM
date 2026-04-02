@@ -71,22 +71,25 @@ Range handleMotion(wint_t input, Pos cur) {
     out = motionFirstGraph(cur);
     break;
   case N_FIND_NEXT:
-    out = motionFindNext(cur, (wchar_t)waitForInput(), true);
-    break;
-  case N_FIND_PREV:
-    out = motionFindPrev(cur, (wchar_t)waitForInput(), true);
-    break;
-  case N_FIND_REPEAT:
-    out = motionFindNext(cur, L'\0', true);
-    break;
-  case N_TO_CHAR_NEXT:
     out = motionFindNext(cur, (wchar_t)waitForInput(), false);
     break;
-  case N_TO_CHAR_PREV:
+  case N_FIND_PREV:
     out = motionFindPrev(cur, (wchar_t)waitForInput(), false);
+    break;
+  case N_FIND_REPEAT:
+    out = motionFindNext(cur, L'\0', false);
+    break;
+  case N_UNTIL_NEXT:
+    out = motionFindNext(cur, (wchar_t)waitForInput(), true);
+    break;
+  case N_UNTIL_PREV:
+    out = motionFindPrev(cur, (wchar_t)waitForInput(), true);
     break;
   case N_WORD_PREV:
     out = motionWordPrev(cur);
+    break;
+  case N_MATCHING_SYMBOL:
+    out = motionMatchingSymbol(cur);
     break;
   case N_WORD_END:
     out = motionNextWordEnd(cur);
@@ -125,6 +128,11 @@ Range handleTextObject(bool inner) {
       return motionWordAround(cursor);
     }
   }
+
+  if (inner)
+    return motionCharInner(cursor, key);
+  else
+    return motionCharAround(cursor, key);
 
   return INVALID_RANGE;
 }

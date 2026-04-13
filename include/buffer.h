@@ -15,9 +15,9 @@ typedef struct {
   bool valid;
 } Range;
 
-#define INVALID_RANGE                                                            \
-  (Range) {                                                                      \
-    { 0, 0 } , { 0, 0 } , false, false                                           \
+#define INVALID_RANGE            \
+  (Range) {                      \
+    {0, 0}, {0, 0}, false, false \
   }
 
 typedef struct {
@@ -61,6 +61,7 @@ bool isBufferStart(Pos pos);
 bool isBufferEnd(Pos pos);
 bool isLineEmpty(int row);
 
+int comparePos(Pos a, Pos b);
 bool bufferDeleteRange(Range range);
 Range bufferNormalizeRange(Range range);
 void bufferClear(void);

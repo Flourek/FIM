@@ -70,6 +70,27 @@ void nAppend() {
   niCursorRight();
 }
 
+bool nDelete(Range range) {
+
+  if (!range.valid)
+    return false;
+
+  range = bufferNormalizeRange(range);
+  bufferDeleteRange(range);
+  curMove(range.start);
+  return false;
+}
+
+// Skeleton for nChange, similar to nDelete
+bool nChange(Range range) {
+  // TODO: Implement change logic (delete + enter insert mode)
+  if (!range.valid)
+    return false;
+  nDelete(range);
+  nInsert(); // Enter insert mode after deleting
+  return true;
+}
+
 void nInsert() {
   state.mode = MODE_INSERT;
   renderSetCursorStyle(CURSOR_STYLE_BAR);

@@ -26,7 +26,7 @@ static bool isValidPos(Pos pos) {
   return true;
 }
 
-static int comparePos(Pos a, Pos b) {
+int comparePos(Pos a, Pos b) {
   if (a.row != b.row)
     return a.row - b.row;
   return a.col - b.col;

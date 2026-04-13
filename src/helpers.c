@@ -44,3 +44,11 @@ char getMatchingSymbol(char c) {
         default: return 0; // no match
     }
 }
+
+bool isBracketSymbol(char c) {
+  return c == getMatchingSymbol(getMatchingSymbol(c));
+}
+
+bool isClosingSymbol(char c){
+  return c > getMatchingSymbol(c);
+}

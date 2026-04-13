@@ -21,6 +21,7 @@ Range motionNextWordEnd(Pos cursor);
 Range motionFirstGraph(Pos cursor);
 Range motionPrevWordEnd(Pos cursor);
 
+Range motionLine(Pos cursor);
 Range motionLineEnd(Pos cursor);
 Range motionLineStart(Pos cursor);
 Range motionLeft(Pos cursor);
@@ -34,8 +35,8 @@ Range motionFindNext(Pos cursor, wchar_t wc, bool until);
 Range motionFindPrev(Pos cursor, wchar_t wc, bool until);
 
 Range motionMatchingSymbol(Pos cursor);
-Range motionCharAround(Pos cursor, wchar_t wc);
-Range motionCharInner(Pos cursor, wchar_t wc);
+Range motionBracketAround(Pos cursor, wchar_t wc);
+Range motionBracketInner(Pos cursor, wchar_t wc);
 Range motionWordInner(Pos cursor);
 Range motionWordAround(Pos cursor);
 #endif

@@ -1,4 +1,5 @@
 #include "motion.h"
+#include "buffer.h"
 #include "helpers.h"
 #include "utf8.h"
 
@@ -107,7 +108,7 @@ Range motionFindPrev(Pos cursor, wchar_t wc, bool until) {
       return (Range){cursor, p, true, true};
     }
   }
-  return (Range){cursor, cursor, true, true};
+  return INVALID_RANGE;
 }
 
 Range motionFirstGraph(Pos cursor) {
@@ -116,6 +117,12 @@ Range motionFirstGraph(Pos cursor) {
   p = motionWordNext(p).end;
 
   return (Range){cursor, p, false, true};
+}
+
+Range motionLine(Pos cursor) {
+  Pos start = (Pos){cursor.row, 0};
+  Pos end = (Pos){cursor.row, bufferLineLength(cursor.row)};
+  return (Range){start, end, true, true};
 }
 
 Range motionLineEnd(Pos cursor) {
@@ -207,11 +214,16 @@ Range motionWordAround(Pos cursor) {
 }
 
 Range motionMatchingSymbol(Pos cursor) {
-  Pos end = cursor;
-  wchar_t original = bufferGetWChar(cursor);
+  Pos start = cursor;
 
-  if (original > 255)
-    return;
+  while (!isBufferEnd(start)) {
+    if (isBracketSymbol(bufferGetWChar(start))) {
+      break;
+    }
+    start = bufferNextWChar(start);
+  }
+
+  wchar_t original = bufferGetWChar(start);
 
   wchar_t matching = (wchar_t)getMatchingSymbol(original);
   bool forward = original < matching; // ascii values, closing ones always later
@@ -219,6 +231,7 @@ Range motionMatchingSymbol(Pos cursor) {
   bool (*stepEndFn)(Pos) = forward ? isBufferEnd : isBufferStart;
   Pos (*stepFn)(Pos) = forward ? bufferNextWChar : bufferPrevWChar;
   int skip = 0;
+  Pos end = start;
 
   while (!stepEndFn(end)) {
     end = stepFn(end);
@@ -228,9 +241,10 @@ Range motionMatchingSymbol(Pos cursor) {
     }
 
     if (bufferGetWChar(end) == matching) {
-      if (skip <= 0)
-        return (Range){cursor, end, true, true};
-      else
+      if (skip <= 0) {
+        // log("CHAR AROUND: %i,%i - %i,%i", start.row, start.col, end.row, end.col);
+        return (Range){start, end, true, true};
+      } else
         skip--;
     }
   }
@@ -238,32 +252,65 @@ Range motionMatchingSymbol(Pos cursor) {
   return INVALID_RANGE;
 }
 
-Range motionCharAround(Pos cursor, wchar_t wc) {
-  Pos start = cursor;
-  Pos end = cursor;
+Range motionBracketAround(Pos cursor, wchar_t wc) {
+  if (!isBracketSymbol(wc))
+    return (Range){0};
 
-  // if not at the [ then look forwad and then back for one
-  if (bufferGetWChar(start) != wc) {
-    Range range;
-    range = motionFindNext(start, wc, false);
+  wchar_t open = wc;
+  wchar_t close = (wchar_t)getMatchingSymbol(wc);
 
-    if (!range.valid)
-      range = motionFindPrev(start, wc, false);
+  Pos pos = cursor;
 
-    if (!range.valid)
-      return INVALID_RANGE;
-    else
-      start = range.end;
+  // STEP 1: If not on bracket, search backwards for opening
+  if (bufferGetWChar(pos) != open && bufferGetWChar(pos) != close) {
+    int depth = 0;
+    bool found = false;
+
+    while (!isBufferStart(pos)) {
+      pos = bufferPrevWChar(pos);
+      wchar_t c = bufferGetWChar(pos);
+
+      if (c == open) {
+        if (depth == 0) {
+          found = true;
+          break;
+        }
+        depth--;
+      }
+
+      if (c == close) {
+        depth++;
+      }
+    }
+
+    if (!found) {
+      Pos linewisePos = (Pos){cursor.row, 0};
+      Range nextSymbol = motionMatchingSymbol(linewisePos);
+      pos = nextSymbol.end;
+
+      if (!nextSymbol.valid)
+        return INVALID_RANGE;
+    }
+    log("CHAR AROUND: %i,%i - %i", pos.row, pos.col, found);
   }
 
-  end = motionMatchingSymbol(start).end;
+  // If we landed on closing, jump to opening
+
+  Pos start = pos;
+  Range match = motionMatchingSymbol(start);
+
+  if (!match.valid)
+    return INVALID_RANGE;
+
+  Pos end = match.end;
 
   log("CHAR AROUND: %i,%i - %i,%i", start.row, start.col, end.row, end.col);
   return (Range){start, end, true, true};
 }
 
-Range motionCharInner(Pos cursor, wchar_t wc) {
-  Range out = motionCharAround(cursor, wc);
+Range motionBracketInner(Pos cursor, wchar_t wc) {
+  Range out = motionBracketAround(cursor, wc);
+  out = bufferNormalizeRange(out);
   out.start.col++;
 
   if (out.end.col == 0) {
@@ -272,6 +319,7 @@ Range motionCharInner(Pos cursor, wchar_t wc) {
   } else {
     out.end.col--;
   }
+  log("CHAR INNER: %i,%i - %i,%i", out.start.row, out.start.col, out.end.row, out.end.col);
 
   return out;
 }

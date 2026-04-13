@@ -24,7 +24,7 @@
 #define I_LINE_START KEY_HOME
 #define I_LINE_END KEY_END
 #define I_NEWLINE 10
-#define N_CHUJ 'c'
+#define N_CHUJ 'z'
 #define N_WORD_NEXT 'w'
 #define N_WORD_PREV 'b'
 #define N_WORD_END 'e'
@@ -37,6 +37,7 @@
 #define N_REPLACE 'r'
 #define N_DELETE_CHAR 'x'
 #define N_DELETE 'd'
+#define N_CHANGE 'c'
 #define N_SUBSTITUTE 's'
 #define N_SAVE 19
 #define N_LOAD 23

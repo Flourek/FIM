@@ -104,17 +104,6 @@ Range handleMotion(wint_t input, Pos cur) {
   return out;
 }
 
-bool nDelete(Range range) {
-
-  if (!range.valid)
-    return false;
-
-  range = bufferNormalizeRange(range);
-  bufferDeleteRange(range);
-  curMove(range.start);
-  return false;
-}
-
 Range handleTextObject(bool inner) {
   wint_t key = waitForInput();
 
@@ -130,17 +119,20 @@ Range handleTextObject(bool inner) {
   }
 
   if (inner)
-    return motionCharInner(cursor, key);
+    return motionBracketInner(cursor, key);
   else
-    return motionCharAround(cursor, key);
+    return motionBracketAround(cursor, key);
 
   return INVALID_RANGE;
 }
 
-Range waitForMotion() {
-  wint_t ch = waitForInput();
+Range waitForMotion(wint_t actionKey) {
+  wint_t input = waitForInput();
 
-  int input = (int)ch;
+  // cc dd..
+  if (actionKey == input)
+    return motionLine(cursor);
+
   switch (input) {
   case I_LEAVE_INSERT:
     return INVALID_RANGE;
@@ -203,8 +195,13 @@ static void normalMode(int keyType, wint_t input) {
     searchClear();
     break;
   case N_DELETE: {
-    Range range = waitForMotion();
+    Range range = waitForMotion(input);
     nDelete(range);
+    break;
+  }
+  case N_CHANGE: {
+    Range range = waitForMotion(input);
+    nChange(range);
     break;
   }
   case N_MERGELINE:

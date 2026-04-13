@@ -1,5 +1,6 @@
 #ifndef ACTIONS_H
 #define ACTIONS_H
+#include "buffer.h"
 
 void niNewline();
 void nReplace(wint_t ch);
@@ -22,4 +23,6 @@ void nWordNext();
 void nMergeLine();
 void nSubstitute();
 void iBackspace();
+bool nDelete(Range range);
+bool nChange(Range range);
 #endif
